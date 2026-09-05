@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -20,19 +20,25 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Create dummy .env file
+    - name: Prepare environment and keystore
       run: |
         touch .env
+        if [ -f debug.keystore.base64 ]; then
+          base64 -d debug.keystore.base64 > debug.keystore
+        fi
+        if [ ! -f debug.keystore ]; then
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+        fi
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+      run: ./gradlew assembleDebug --no-daemon --stacktrace
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Quotex-AI-Pro-Scanner-Debug-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
+        name: Quotex-AI-Pro-Scanner-APK
+        path: app/build/outputs/apk/debug/*.apk
         retention-days: 14
