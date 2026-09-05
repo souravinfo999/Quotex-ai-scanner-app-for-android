@@ -8,6 +8,8 @@ import android.hardware.display.VirtualDisplay
 import android.media.Image
 import android.media.ImageReader
 import android.media.projection.MediaProjection
+import android.os.Handler
+import android.os.Looper
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +37,21 @@ object ScreenshotHelper {
         val imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
         var virtualDisplay: VirtualDisplay? = null
 
+        // Android 14+ (API 34+) strictly requires registering a MediaProjection.Callback
+        // BEFORE calling createVirtualDisplay!
+        val callback = object : MediaProjection.Callback() {
+            override fun onStop() {
+                // MediaProjection stopped
+            }
+        }
+        val mainHandler = Handler(Looper.getMainLooper())
+
         try {
+            try {
+                mediaProjection.registerCallback(callback, mainHandler)
+            } catch (ignored: Exception) {
+            }
+
             virtualDisplay = mediaProjection.createVirtualDisplay(
                 "QuotexScreenCapture",
                 width,

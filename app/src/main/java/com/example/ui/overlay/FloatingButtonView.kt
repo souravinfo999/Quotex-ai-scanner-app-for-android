@@ -127,8 +127,12 @@ class FloatingButtonView(
 
         // Scanning rotating arc indicator
         if (isScanning) {
-            val arcRect = RectF(pad + dpToPx(2f), pad + dpToPx(2f), w - pad - dpToPx(2f), h - pad - dpToPx(2f))
-            canvas.drawArc(arcRect, scanRotation, 100f, false, progressPaint)
+            val arcRect = RectF(pad + dpToPx(1f), pad + dpToPx(1f), w - pad - dpToPx(1f), h - pad - dpToPx(1f))
+            // Dual glowing scanning arcs
+            progressPaint.color = Color.parseColor("#00E676")
+            canvas.drawArc(arcRect, scanRotation, 110f, false, progressPaint)
+            progressPaint.color = Color.parseColor("#00D4AA")
+            canvas.drawArc(arcRect, scanRotation + 180f, 90f, false, progressPaint)
         }
 
         // Center Robot / Candlesticks Icon

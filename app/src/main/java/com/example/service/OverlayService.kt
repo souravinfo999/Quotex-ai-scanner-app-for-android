@@ -18,6 +18,8 @@ import com.example.data.model.PredictionResult
 import com.example.data.repository.ScannerRepository
 import com.example.ui.overlay.FloatingButtonView
 import com.example.ui.overlay.PredictionPopupView
+import com.example.ui.overlay.ScanningLaserOverlayView
+import com.example.service.NotificationHelper
 import com.example.utils.PreferenceManager
 import com.example.utils.ScreenshotHelper
 import kotlinx.coroutines.CoroutineScope
@@ -37,16 +39,24 @@ class OverlayService : Service() {
 
     private var floatingButton: FloatingButtonView? = null
     private var predictionPopup: PredictionPopupView? = null
+    private var laserOverlay: ScanningLaserOverlayView? = null
     private var mediaProjection: MediaProjection? = null
 
     private var isAnalyzing = false
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private val projectionCallback = object : MediaProjection.Callback() {
+        override fun onStop() {
+            mediaProjection = null
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         repository = ScannerRepository.getInstance(this)
         preferenceManager = PreferenceManager.getInstance(this)
+        laserOverlay = ScanningLaserOverlayView(this)
 
         NotificationHelper.createNotificationChannel(this)
     }
@@ -84,9 +94,11 @@ class OverlayService : Service() {
         if (data != null && code != 0) {
             val mpManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             try {
-                mediaProjection = mpManager.getMediaProjection(code, data)
+                val mp = mpManager.getMediaProjection(code, data)
+                mp?.registerCallback(projectionCallback, mainHandler)
+                mediaProjection = mp
             } catch (e: Exception) {
-                // Ignore or log
+                // Retry registration if already created
             }
         }
     }
@@ -138,54 +150,66 @@ class OverlayService : Service() {
 
         val settings = repository.getSettings()
 
-        // Give visual and toast feedback immediately
+        // Activate visual indicators: Floating button spin + Screen Cyber Laser HUD
         floatingButton?.setScanningState(true)
+        laserOverlay?.show()
+        predictionPopup?.let { removePredictionPopup() }
         isAnalyzing = true
-        Toast.makeText(this, "🔍 Chart Analyzing...", Toast.LENGTH_SHORT).show()
 
         serviceScope.launch {
-            // Apply configured Scan Delay
-            if (settings.scanDelayMs > 0) {
-                delay(settings.scanDelayMs)
-            }
+            try {
+                // Apply configured Scan Delay
+                if (settings.scanDelayMs > 0) {
+                    delay(settings.scanDelayMs)
+                }
 
-            // Ensure MediaProjection is available
-            initMediaProjection()
-            val mp = mediaProjection
+                // Ensure MediaProjection is available
+                initMediaProjection()
+                val mp = mediaProjection
 
-            if (mp != null) {
-                val captureResult = ScreenshotHelper.captureScreen(this@OverlayService, mp)
+                if (mp != null) {
+                    val captureResult = ScreenshotHelper.captureScreen(this@OverlayService, mp)
 
-                if (captureResult.isSuccess) {
-                    val bitmap = captureResult.getOrThrow()
-                    val analysisResult = repository.analyzeBitmap(bitmap)
+                    if (captureResult.isSuccess) {
+                        val bitmap = captureResult.getOrThrow()
+                        val analysisResult = repository.analyzeBitmap(bitmap)
 
-                    withContext(Dispatchers.Main) {
-                        floatingButton?.setScanningState(false)
-                        isAnalyzing = false
-                        ScreenshotHelper.cleanTempScreenshots(this@OverlayService)
+                        withContext(Dispatchers.Main) {
+                            floatingButton?.setScanningState(false)
+                            laserOverlay?.dismiss()
+                            isAnalyzing = false
+                            ScreenshotHelper.cleanTempScreenshots(this@OverlayService)
 
-                        if (analysisResult.isSuccess) {
-                            showPredictionPopup(analysisResult.getOrThrow())
-                        } else {
-                            val errorMsg = analysisResult.exceptionOrNull()?.message ?: "Analysis failed"
+                            if (analysisResult.isSuccess) {
+                                showPredictionPopup(analysisResult.getOrThrow())
+                            } else {
+                                val errorMsg = analysisResult.exceptionOrNull()?.message ?: "Analysis failed"
+                                Toast.makeText(this@OverlayService, errorMsg, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            floatingButton?.setScanningState(false)
+                            laserOverlay?.dismiss()
+                            isAnalyzing = false
+                            val errorMsg = captureResult.exceptionOrNull()?.message ?: "📸 Screenshot capture failed. Try again."
                             Toast.makeText(this@OverlayService, errorMsg, Toast.LENGTH_LONG).show()
                         }
                     }
                 } else {
                     withContext(Dispatchers.Main) {
                         floatingButton?.setScanningState(false)
+                        laserOverlay?.dismiss()
                         isAnalyzing = false
-                        val errorMsg = captureResult.exceptionOrNull()?.message ?: "📸 Screenshot capture failed. Try again."
-                        Toast.makeText(this@OverlayService, errorMsg, Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@OverlayService, "📸 MediaProjection not initialized. Open app to allow screen capture.", Toast.LENGTH_LONG).show()
                     }
                 }
-            } else {
-                // If media projection was not granted or user is testing from app
+            } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     floatingButton?.setScanningState(false)
+                    laserOverlay?.dismiss()
                     isAnalyzing = false
-                    Toast.makeText(this@OverlayService, "📸 MediaProjection not initialized. Open app to allow screen capture.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@OverlayService, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -249,6 +273,7 @@ class OverlayService : Service() {
         super.onDestroy()
         isRunning = false
         preferenceManager.setOverlayActive(false)
+        laserOverlay?.dismiss()
         removePredictionPopup()
         removeFloatingButton()
 
