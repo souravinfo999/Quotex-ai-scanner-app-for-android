@@ -9,96 +9,200 @@ import android.media.Image
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.os.Handler
-import android.os.Looper
+import android.os.HandlerThread
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.WindowManager
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.coroutines.resume
 
 object ScreenshotHelper {
 
-    suspend fun captureScreen(
-        context: Context,
-        mediaProjection: MediaProjection
-    ): Result<Bitmap> = withContext(Dispatchers.Default) {
-        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val metrics = DisplayMetrics()
-        @Suppress("DEPRECATION")
-        windowManager.defaultDisplay.getRealMetrics(metrics)
+    private const val TAG = "ScreenshotHelper"
 
-        val width = metrics.widthPixels
-        val height = metrics.heightPixels
-        val density = metrics.densityDpi
+    private var imageReader: ImageReader? = null
+    private var virtualDisplay: VirtualDisplay? = null
+    private var handlerThread: HandlerThread? = null
+    private var isSessionActive = false
+    private var activeMediaProjection: MediaProjection? = null
+    private var screenWidth = 0
+    private var screenHeight = 0
 
-        val imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-        var virtualDisplay: VirtualDisplay? = null
+    private val lock = Any()
+    private var isFrameRequested = false
+    private var frameContinuation: CancellableContinuation<Bitmap?>? = null
 
-        // Android 14+ (API 34+) strictly requires registering a MediaProjection.Callback
-        // BEFORE calling createVirtualDisplay!
-        val callback = object : MediaProjection.Callback() {
-            override fun onStop() {
-                // MediaProjection stopped
-            }
+    val isReady: Boolean
+        get() = isSessionActive && virtualDisplay != null
+
+    @Synchronized
+    fun initSession(context: Context, mediaProjection: MediaProjection): Boolean {
+        if (isSessionActive && activeMediaProjection == mediaProjection && virtualDisplay != null) {
+            return true
         }
-        val mainHandler = Handler(Looper.getMainLooper())
+        stopSession()
 
         try {
+            val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val metrics = DisplayMetrics()
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.getRealMetrics(metrics)
+
+            screenWidth = metrics.widthPixels
+            screenHeight = metrics.heightPixels
+            val density = metrics.densityDpi
+
+            val thread = HandlerThread("QuotexScreenCaptureThread").apply { start() }
+            handlerThread = thread
+            val handler = Handler(thread.looper)
+
+            val reader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2)
+            imageReader = reader
+
+            // Android 14+ requirement: Register callback before createVirtualDisplay
+            val callback = object : MediaProjection.Callback() {
+                override fun onStop() {
+                    Log.d(TAG, "MediaProjection session stopped by system")
+                    stopSession()
+                }
+            }
             try {
-                mediaProjection.registerCallback(callback, mainHandler)
-            } catch (ignored: Exception) {
+                mediaProjection.registerCallback(callback, handler)
+            } catch (e: Exception) {
+                Log.w(TAG, "Callback register warning: ${e.message}")
             }
 
             virtualDisplay = mediaProjection.createVirtualDisplay(
                 "QuotexScreenCapture",
-                width,
-                height,
+                screenWidth,
+                screenHeight,
                 density,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader.surface,
+                reader.surface,
                 null,
-                null
+                handler
             )
 
-            // Wait for first image frame with timeout of 2.5 seconds
-            val bitmap = withTimeoutOrNull(2500) {
-                var capturedBitmap: Bitmap? = null
-                // Allow a brief settling moment for screen buffer
-                delay(200)
-
-                for (attempt in 1..15) {
-                    val image = imageReader.acquireLatestImage()
-                    if (image != null) {
-                        try {
-                            capturedBitmap = convertImageToBitmap(image, width, height)
-                            if (capturedBitmap != null) {
-                                break
+            reader.setOnImageAvailableListener({ ir ->
+                try {
+                    val image = ir.acquireLatestImage() ?: return@setOnImageAvailableListener
+                    try {
+                        val cont = synchronized(lock) {
+                            if (isFrameRequested) {
+                                isFrameRequested = false
+                                val c = frameContinuation
+                                frameContinuation = null
+                                c
+                            } else {
+                                null
                             }
-                        } finally {
-                            image.close()
                         }
-                    }
-                    delay(100)
-                }
-                capturedBitmap
-            }
 
-            if (bitmap != null) {
-                // Save temp file in cache as required
-                saveTempScreenshot(context, bitmap)
-                Result.success(bitmap)
-            } else {
-                Result.failure(Exception("📸 Screenshot capture failed. Try again."))
-            }
+                        if (cont != null && cont.isActive) {
+                            val bitmap = convertImageToBitmap(image, screenWidth, screenHeight)
+                            cont.resume(bitmap)
+                        }
+                    } finally {
+                        image.close()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in onImageAvailable: ${e.message}")
+                }
+            }, handler)
+
+            activeMediaProjection = mediaProjection
+            isSessionActive = true
+            Log.d(TAG, "Screen capture session initialized successfully (${screenWidth}x${screenHeight})")
+            return true
         } catch (e: Exception) {
-            Result.failure(Exception(e.message ?: "Screenshot failed"))
-        } finally {
-            virtualDisplay?.release()
-            imageReader.close()
+            Log.e(TAG, "Failed to initialize capture session: ${e.message}", e)
+            stopSession()
+            return false
         }
+    }
+
+    suspend fun captureScreen(context: Context): Result<Bitmap> = withContext(Dispatchers.Default) {
+        val reader = imageReader
+        if (!isSessionActive || reader == null) {
+            return@withContext Result.failure(
+                Exception("Screen capture session ended. Open app to restart floating scanner.")
+            )
+        }
+
+        // Fast path: try acquiring latest image directly
+        try {
+            val directImage = reader.acquireLatestImage()
+            if (directImage != null) {
+                try {
+                    val directBitmap = convertImageToBitmap(directImage, screenWidth, screenHeight)
+                    if (directBitmap != null) {
+                        saveTempScreenshot(context, directBitmap)
+                        return@withContext Result.success(directBitmap)
+                    }
+                } finally {
+                    directImage.close()
+                }
+            }
+        } catch (ignored: Exception) {}
+
+        // Awaiting next frame from the ongoing VirtualDisplay stream
+        val capturedBitmap = withTimeoutOrNull(2500) {
+            suspendCancellableCoroutine<Bitmap?> { cont ->
+                synchronized(lock) {
+                    isFrameRequested = true
+                    frameContinuation = cont
+                }
+                cont.invokeOnCancellation {
+                    synchronized(lock) {
+                        isFrameRequested = false
+                        frameContinuation = null
+                    }
+                }
+            }
+        }
+
+        if (capturedBitmap != null) {
+            saveTempScreenshot(context, capturedBitmap)
+            Result.success(capturedBitmap)
+        } else {
+            Result.failure(Exception("Screenshot capture timed out. Please try again."))
+        }
+    }
+
+    @Synchronized
+    fun stopSession() {
+        isSessionActive = false
+        synchronized(lock) {
+            try {
+                frameContinuation?.cancel()
+            } catch (ignored: Exception) {}
+            frameContinuation = null
+            isFrameRequested = false
+        }
+
+        try {
+            virtualDisplay?.release()
+        } catch (ignored: Exception) {}
+        virtualDisplay = null
+
+        try {
+            imageReader?.close()
+        } catch (ignored: Exception) {}
+        imageReader = null
+
+        try {
+            handlerThread?.quitSafely()
+        } catch (ignored: Exception) {}
+        handlerThread = null
+
+        activeMediaProjection = null
+        Log.d(TAG, "Screen capture session stopped")
     }
 
     private fun convertImageToBitmap(image: Image, width: Int, height: Int): Bitmap? {
@@ -115,7 +219,6 @@ object ScreenshotHelper {
         bitmap.copyPixelsFromBuffer(buffer)
 
         return if (bitmapWidth != width) {
-            // Crop out stride padding
             val cropped = Bitmap.createBitmap(bitmap, 0, 0, width, height)
             bitmap.recycle()
             cropped

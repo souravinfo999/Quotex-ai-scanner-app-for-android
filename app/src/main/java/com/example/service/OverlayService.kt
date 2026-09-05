@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.Toast
@@ -47,6 +48,7 @@ class OverlayService : Service() {
 
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
+            ScreenshotHelper.stopSession()
             mediaProjection = null
         }
     }
@@ -87,18 +89,23 @@ class OverlayService : Service() {
     }
 
     private fun initMediaProjection() {
-        if (mediaProjection != null) return
+        if (mediaProjection != null && ScreenshotHelper.isReady) return
 
         val data = mediaProjectionIntentData
         val code = mediaProjectionResultCode
-        if (data != null && code != 0) {
+        if (data != null && code != 0 && mediaProjection == null) {
             val mpManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             try {
                 val mp = mpManager.getMediaProjection(code, data)
-                mp?.registerCallback(projectionCallback, mainHandler)
+                // Clear out stored intent so it is never reused
+                mediaProjectionIntentData = null
+                mediaProjectionResultCode = 0
                 mediaProjection = mp
+                if (mp != null) {
+                    ScreenshotHelper.initSession(this, mp)
+                }
             } catch (e: Exception) {
-                // Retry registration if already created
+                Log.e("OverlayService", "Failed to init MediaProjection: ${e.message}")
             }
         }
     }
@@ -163,12 +170,13 @@ class OverlayService : Service() {
                     delay(settings.scanDelayMs)
                 }
 
-                // Ensure MediaProjection is available
-                initMediaProjection()
-                val mp = mediaProjection
+                // Ensure capture session is initialized
+                if (!ScreenshotHelper.isReady && mediaProjection != null) {
+                    ScreenshotHelper.initSession(this@OverlayService, mediaProjection!!)
+                }
 
-                if (mp != null) {
-                    val captureResult = ScreenshotHelper.captureScreen(this@OverlayService, mp)
+                if (ScreenshotHelper.isReady) {
+                    val captureResult = ScreenshotHelper.captureScreen(this@OverlayService)
 
                     if (captureResult.isSuccess) {
                         val bitmap = captureResult.getOrThrow()
@@ -201,7 +209,7 @@ class OverlayService : Service() {
                         floatingButton?.setScanningState(false)
                         laserOverlay?.dismiss()
                         isAnalyzing = false
-                        Toast.makeText(this@OverlayService, "📸 MediaProjection not initialized. Open app to allow screen capture.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@OverlayService, "📸 Screen capture session ended. Open Quotex AI Pro app to restart.", Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
@@ -276,6 +284,8 @@ class OverlayService : Service() {
         laserOverlay?.dismiss()
         removePredictionPopup()
         removeFloatingButton()
+
+        ScreenshotHelper.stopSession()
 
         try {
             mediaProjection?.stop()
