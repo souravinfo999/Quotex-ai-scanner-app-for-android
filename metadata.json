@@ -1,0 +1,6 @@
+{
+  "name": "Quotex AI Pro Scanner",
+  "description": "AI-powered binary trading chart scanner predicting next candle direction using Mistral AI Vision analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

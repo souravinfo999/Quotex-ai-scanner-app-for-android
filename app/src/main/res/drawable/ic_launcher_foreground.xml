@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Scanner Target Outer Reticle Ring -->
+    <path
+        android:strokeColor="#407B61FF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M32,32 A31,31 0 0,1 76,32 M76,76 A31,31 0 0,1 32,76" />
+
+    <!-- Corner Brackets -->
+    <path
+        android:strokeColor="#00D4AA"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M27,37 L27,27 L37,27 M71,27 L81,27 L81,37 M81,71 L81,81 L71,81 M37,81 L27,81 L27,71" />
+
+    <!-- Candlestick 1 (Bullish Green - Left) -->
+    <!-- Wick -->
+    <path
+        android:strokeColor="#00E676"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M40,32 L40,74" />
+    <!-- Body -->
+    <path
+        android:fillColor="#00D4AA"
+        android:pathData="M36,42 h8 v24 h-8 z" />
+
+    <!-- Candlestick 2 (Bearish Red - Center-Right) -->
+    <!-- Wick -->
+    <path
+        android:strokeColor="#FF5252"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M54,28 L54,78" />
+    <!-- Body -->
+    <path
+        android:fillColor="#FF4757"
+        android:pathData="M50,48 h8 v20 h-8 z" />
+
+    <!-- Candlestick 3 (Bullish Green - Right breakout) -->
+    <!-- Wick -->
+    <path
+        android:strokeColor="#00E676"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M68,26 L68,68" />
+    <!-- Body -->
+    <path
+        android:fillColor="#00D4AA"
+        android:pathData="M64,34 h8 v22 h-8 z" />
+
+    <!-- Cyan Laser Scan Beam Line across center -->
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M25,54 L83,54" />
+
+    <!-- AI Core Node Point -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54m-3,0a3,3 0 1,1 6,0a3,3 0 1,1 -6,0" />
+    <path
+        android:fillColor="#7B61FF"
+        android:pathData="M54,54m-1.5,0a1.5,1.5 0 1,1 3,0a1.5,1.5 0 1,1 -3,0" />
+</vector>
