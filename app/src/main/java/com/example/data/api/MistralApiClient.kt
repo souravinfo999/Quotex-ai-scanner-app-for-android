@@ -107,8 +107,8 @@ class MistralApiClient {
 
             val requestJson = JSONObject().apply {
                 put("model", modelToUse)
-                put("temperature", 0.42)
-                put("max_tokens", 900)
+                put("temperature", 0.20)
+                put("max_tokens", 850)
                 put("response_format", JSONObject().apply {
                     put("type", "json_object")
                 })
@@ -119,6 +119,9 @@ class MistralApiClient {
                 .url("https://api.mistral.ai/v1/chat/completions")
                 .header("Authorization", "Bearer $apiKey")
                 .header("Content-Type", "application/json")
+                .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                .header("Pragma", "no-cache")
+                .header("Expires", "0")
                 .post(requestJson.toString().toRequestBody(jsonMediaType))
                 .build()
 
@@ -205,86 +208,74 @@ class MistralApiClient {
             }
         }
 
-        // --- STRICT ANTI-HALLUCINATION & CONSISTENCY ENGINE ---
-        // 1. Bearish Engulfing Sanity Check:
-        // A Bearish Engulfing CANNOT occur if the latest candle was GREEN or DOJI!
+        // --- STRICT PATTERN SANITY CHECK (DO NOT ALTER PREDICTION) ---
+        // A Bearish Engulfing CANNOT occur if the latest candle is GREEN
         val isClaimingBearishEngulfing = candlePattern.contains("Bearish", ignoreCase = true) &&
                 candlePattern.contains("Engulf", ignoreCase = true)
-        if (isClaimingBearishEngulfing) {
-            if (lastCandleColor.contains("GREEN") || lastCandleColor == "DOJI") {
-                candlePattern = if (wickRejection.contains("LOWER")) "Hammer / Bullish Pin Bar"
-                else "Bullish Momentum Candle"
-            } else if (lastCandleColor.contains("RED") && prevCandleColor.contains("RED")) {
-                candlePattern = "Bearish Momentum / Trend Continuation"
-            }
+        if (isClaimingBearishEngulfing && lastCandleColor.contains("GREEN")) {
+            candlePattern = if (wickRejection.contains("LOWER")) "Hammer / Bullish Pin Bar" else "Bullish Reaction"
         }
 
-        // 2. Bullish Engulfing Sanity Check:
+        // A Bullish Engulfing CANNOT occur if the latest candle is RED
         val isClaimingBullishEngulfing = candlePattern.contains("Bullish", ignoreCase = true) &&
                 candlePattern.contains("Engulf", ignoreCase = true)
-        if (isClaimingBullishEngulfing) {
-            if (lastCandleColor.contains("RED") || lastCandleColor == "DOJI") {
-                candlePattern = if (wickRejection.contains("UPPER")) "Shooting Star / Upper Wick Rejection"
-                else "Bearish Momentum Candle"
-            }
+        if (isClaimingBullishEngulfing && lastCandleColor.contains("RED")) {
+            candlePattern = if (wickRejection.contains("UPPER")) "Shooting Star / Bearish Pin Bar" else "Bearish Reaction"
         }
 
-        // 3. Directional Evidence Consistency Check:
-        val allConfText = confirmationsList.joinToString(" ").lowercase()
-        val bullishScore = listOf("support", "lower wick", "buyer", "bounce", "hammer", "demand", "bullish", "green", "absorption")
-            .count { allConfText.contains(it) }
-        val bearishScore = listOf("resistance", "upper wick", "seller", "breakdown", "shooting star", "supply", "bearish", "red", "rejection at resistance")
-            .count { allConfText.contains(it) }
+        val rawConfidence = json.optInt("confidence", if (prediction == "NO_CHART") 0 else 65)
+        val confidence = rawConfidence.coerceIn(0, 100)
 
-        if (prediction == "DOWN" && (lastCandleColor.contains("GREEN") || wickRejection.contains("LOWER") || keyLevel.contains("SUPPORT"))) {
-            if (bullishScore > bearishScore) {
-                prediction = "UP"
-            }
-        } else if (prediction == "UP" && (lastCandleColor.contains("RED") || wickRejection.contains("UPPER") || keyLevel.contains("RESISTANCE"))) {
-            if (bearishScore > bullishScore) {
-                prediction = "DOWN"
-            }
-        }
-
-        var confidence = json.optInt("confidence", if (prediction == "NO_CHART") 0 else 78)
-        if (confidence < 0) confidence = 0
-        if (confidence > 100) confidence = 100
-
-        // If confidence is below threshold, mark as UNCERTAIN (unless NO_CHART)
-        if (prediction != "NO_CHART" && confidence < threshold && prediction != "UNCERTAIN") {
+        // If confidence is below the threshold or the setup is ambiguous, trigger WAIT / UNCERTAIN
+        if (prediction != "NO_CHART" && (confidence < threshold || prediction == "UNCERTAIN")) {
             prediction = "UNCERTAIN"
         }
 
-        val defaultPrimary = when (prediction) {
-            "NO_CHART" -> "No trading candlestick chart detected. Please open Quotex or trading screen and scan again."
-            "UP" -> "Bullish Price Action Reaction at Support Zone"
-            "DOWN" -> "Bearish Price Action Rejection at Resistance Zone"
-            else -> "Market Consolidating / Wait for Confirmation"
-        }
-        var primarySignal = json.optString("primary_signal", defaultPrimary)
-        if (prediction == "UP" && primarySignal.contains("Bearish", ignoreCase = true)) {
-            primarySignal = "Bullish Price Action Reaction at Key Support"
-        } else if (prediction == "DOWN" && primarySignal.contains("Bullish", ignoreCase = true)) {
-            primarySignal = "Bearish Price Action Rejection at Key Resistance"
-        }
-
-        if (prediction == "NO_CHART" && confirmationsList.isEmpty()) {
-            confirmationsList.add("No financial candlesticks found")
-            confirmationsList.add("Screen displays non-chart content")
-            confirmationsList.add("Open Quotex/Trading platform and re-scan")
-        }
-
-        val srZone = json.optString("sr_zone", if (prediction == "UP") "Support Level" else if (prediction == "DOWN") "Resistance Level" else "None")
-        val fvgDetected = json.optBoolean("fvg_detected", false)
-        val trend = json.optString("trend", if (prediction == "NO_CHART") "None" else if (prediction == "UP") "Bullish" else if (prediction == "DOWN") "Bearish" else "Sideways")
-        val riskLevel = json.optString("risk_level", if (prediction == "NO_CHART") "HIGH" else "LOW").uppercase()
         val defaultAdvice = when (prediction) {
             "NO_CHART" -> "OPEN TRADING CHART & TRY AGAIN"
             "UP" -> "ENTER NOW (CALL / UP)"
             "DOWN" -> "ENTER NOW (PUT / DOWN)"
             else -> "WAIT FOR CLEAR SIGNAL"
         }
-        val advice = json.optString("advice", defaultAdvice)
+        val advice = json.optString("advice", defaultAdvice).ifBlank { defaultAdvice }
+
+        val defaultPrimary = when (prediction) {
+            "NO_CHART" -> "No trading candlestick chart detected. Open Quotex or trading platform and re-scan."
+            "UP" -> "Bullish Price Action Reaction"
+            "DOWN" -> "Bearish Price Action Reaction"
+            else -> "Market Indecision / Wait for Clear Confirmation"
+        }
+        val primarySignal = json.optString("primary_signal", defaultPrimary).ifBlank { defaultPrimary }
+
+        if (prediction == "NO_CHART" && confirmationsList.isEmpty()) {
+            confirmationsList.add("No financial candlesticks found")
+            confirmationsList.add("Screen displays non-chart content")
+            confirmationsList.add("Open Quotex/Trading platform and re-scan")
+        } else if (confirmationsList.isEmpty()) {
+            when (prediction) {
+                "UP" -> {
+                    confirmationsList.add("Bullish candle reaction observed")
+                    confirmationsList.add("Buyers defending support or upward momentum")
+                }
+                "DOWN" -> {
+                    confirmationsList.add("Bearish candle rejection observed")
+                    confirmationsList.add("Sellers defending resistance or downward momentum")
+                }
+                else -> {
+                    confirmationsList.add("No clean rejection or breakout trigger")
+                    confirmationsList.add("Wait for next candle to establish edge")
+                }
+            }
+        }
+
+        val srZone = json.optString("sr_zone", if (prediction == "UP") "Support Level" else if (prediction == "DOWN") "Resistance Level" else "None")
+        val fvgDetected = json.optBoolean("fvg_detected", false)
+        val trend = json.optString("trend", if (prediction == "NO_CHART") "None" else if (prediction == "UP") "Bullish" else if (prediction == "DOWN") "Bearish" else "Sideways")
+        val riskLevel = json.optString("risk_level", when (prediction) {
+            "UP", "DOWN" -> "LOW"
+            "UNCERTAIN" -> "MEDIUM"
+            else -> "HIGH"
+        }).uppercase()
 
         return PredictionResult(
             prediction = prediction,
@@ -306,12 +297,20 @@ class MistralApiClient {
         val SYSTEM_PROMPT = """
 You are an expert algorithmic binary options price action analyst specializing in 1-minute candlestick forecasting on Quotex, Pocket Option, and OTC trading charts.
 
-TASK:
-Analyze the provided screenshot of a trading chart and forecast the IMMEDIATE NEXT CANDLE: "UP" (Call / Green), "DOWN" (Put / Red), or "UNCERTAIN".
+CRITICAL DIRECTIVE - INDEPENDENT & UNBIASED EVALUATION:
+- Analyze THIS screenshot purely on its own merits from scratch.
+- DO NOT assume previous scans or reuse old assumptions.
+- DO NOT default to always "UP".
+- DO NOT default to always "DOWN".
+- DO NOT default to always "UNCERTAIN".
+- Follow this exact rule:
+  * If the chart has clear Bullish price action -> Forecast "UP" with high confidence.
+  * If the chart has clear Bearish price action -> Forecast "DOWN" with high confidence.
+  * If the chart is trapped in consolidation, has a Doji, has equal wicks, or lacks a clear edge -> Forecast "UNCERTAIN", assign lower confidence (< 70), and advise "WAIT FOR CLEAR SIGNAL".
 
-STEP 0: SCREENSHOT VERIFICATION (STRICT):
-Check if this screenshot contains an active financial candlestick trading chart (Quotex, Pocket Option, TradingView, MetaTrader, candlestick chart with green/red candles and price levels).
-If the screenshot shows a browser (articles, search, scribd), home screen, camera, settings, document, or non-trading app:
+STEP 0: SCREENSHOT VERIFICATION:
+Check if this screenshot contains an active financial candlestick trading chart (Quotex, Pocket Option, TradingView, green/red candles on a grid).
+If the screenshot shows a browser, home screen, settings, or non-trading app:
 Return IMMEDIATELY:
 {
   "is_chart_detected": false,
@@ -327,7 +326,6 @@ Return IMMEDIATELY:
   "primary_signal": "No financial trading chart found on this screen.",
   "confirmations": [
     "No financial candlestick chart detected",
-    "Screen displays non-trading app or text document",
     "Please open Quotex or your trading platform to scan"
   ],
   "prediction": "NO_CHART",
@@ -338,51 +336,45 @@ Return IMMEDIATELY:
   "advice": "OPEN TRADING CHART & TRY AGAIN"
 }
 
-STEP 1: ACCURATE VISUAL INSPECTION (CRITICAL RULES):
-1. CANDLESTICK COLORS:
-   - GREEN / CYAN = Bullish candle (price closed higher than open).
-   - RED / ORANGE = Bearish candle (price closed lower than open).
-   - Historical candles are on the left; the active/last closed candle is on the FAR RIGHT next to the current price line.
+STEP 1: VISUAL INSPECTION (PRICE ACTION ONLY):
+1. Candlestick on Far Right (Most recent closed candle next to price line):
+   - GREEN / CYAN: Price closed higher than opened.
+   - RED / ORANGE: Price closed lower than opened.
+   - DOJI: Flat thin line, open equals close.
+2. Wick Rejections:
+   - Long LOWER wick: Buyers pushed price up from lows (bullish defense).
+   - Long UPPER wick: Sellers pushed price down from highs (bearish defense).
+   - Equal or No wicks: Indecision or pure momentum.
+3. Ignore broker UI buttons (Ignore the big green/red Call/Put buttons on the screen). Look ONLY at the candles on the chart grid.
 
-2. IGNORE APP INTERFACE BUTTONS (VERY IMPORTANT):
-   - Quotex and mobile brokers have large interface trade buttons (a green "UP" / Call button and a red "DOWN" / Put button) at the bottom or side.
-   - DO NOT let these app buttons bias your reading! Inspect ONLY the candlesticks drawn on the grid in the chart area.
+STEP 2: SYMMETRICAL 3-WAY DECISION RULES:
 
-3. STRICT CANDLESTICK PATTERN RULES (ZERO HALLUCINATION):
-   - "Bearish Engulfing": REQUIRES that:
-     (1) The previous candle was clearly GREEN (Bullish).
-     (2) The latest closed candle is clearly RED (Bearish).
-     (3) The RED candle's body COMPLETELY covers and engulfs the entire body of the previous GREEN candle.
-     * IF THE CURRENT CANDLE IS GREEN, IT IS 100% IMPOSSIBLE TO BE A BEARISH ENGULFING. DO NOT HALLUCINATE BEARISH ENGULFING ON GREEN CANDLES! *
-   - "Bullish Engulfing": REQUIRES that:
-     (1) The previous candle was RED (Bearish).
-     (2) The latest closed candle is GREEN (Bullish).
-     (3) The GREEN candle's body COMPLETELY covers and engulfs the previous RED candle's body.
-   - "Hammer / Bullish Pin Bar": Long LOWER wick (rejection of lower prices at support), small body at the top. Strongly indicates BUYERS entering -> Predict "UP"!
-   - "Shooting Star / Bearish Pin Bar": Long UPPER wick (rejection of higher prices at resistance), small body at the bottom. Strongly indicates SELLERS defending -> Predict "DOWN"!
-   - "Morning Star": Strong red candle -> small base/doji at support -> strong green candle -> Predict "UP"!
-   - "Evening Star": Strong green candle -> small star at resistance -> strong red candle -> Predict "DOWN"!
+A. PREDICT "UP" (Call / Green candle expected) WHEN:
+- Clean bounce from a Support line or lower band with prominent lower wick.
+- Bullish Hammer / Pin Bar at support.
+- Bullish Engulfing (current green body fully covers previous red body).
+- Consecutive strong green momentum candles breaking above a range.
+-> confidence: 75 to 92
+-> advice: "ENTER NOW (CALL / UP)"
 
-STEP 2: BALANCED SYMMETRICAL EVALUATION:
-Do NOT default to "DOWN". Symmetrically evaluate Bullish and Bearish evidence:
+B. PREDICT "DOWN" (Put / Red candle expected) WHEN:
+- Clean rejection from a Resistance line or upper band with prominent upper wick.
+- Shooting Star / Bearish Pin Bar at resistance.
+- Bearish Engulfing (current red body fully covers previous green body).
+- Consecutive strong red momentum candles breaking below a range.
+-> confidence: 75 to 92
+-> advice: "ENTER NOW (PUT / DOWN)"
 
-A. PREDICT "UP" (Call) WHEN:
-- Prominent LOWER wick rejection showing strong buyer absorption from below.
-- Price bouncing off a horizontal Support line, order block, round number, or lower Bollinger Band / moving average.
-- Bullish pattern: Hammer, Bullish Engulfing, Morning Star, Piercing Pattern, or Consecutive Strong Green candles (Three White Soldiers).
-- Price sweeping liquidity below a low and quickly snapping back up.
+C. PREDICT "UNCERTAIN" (Wait / No Trade) WHEN:
+- Price is floating in the middle of a channel without touching Support or Resistance.
+- Candle is a Doji, spinning top, or has equal wicks on both top and bottom.
+- Conflicting signals (e.g. green candle hitting direct resistance without breakout, or red candle hitting direct support).
+- Low volatility, sideways chop, or uncertain market structure.
+-> confidence: 45 to 65
+-> advice: "WAIT FOR CLEAR SIGNAL"
+-> primary_signal: "Market Consolidating / Wait for Confirmation"
 
-B. PREDICT "DOWN" (Put) WHEN:
-- Prominent UPPER wick rejection showing seller defense from above.
-- Price rejected at a horizontal Resistance line, supply zone, round number, or upper band.
-- Bearish pattern: Shooting Star, Bearish Engulfing (RED candle engulfing GREEN), Evening Star, Dark Cloud Cover, or Consecutive Strong Red candles.
-- Price sweeping liquidity above a high and breaking downward.
-
-C. PREDICT "UNCERTAIN" WHEN:
-- Equal wicks on both sides (Doji / Spinning Top) with no directional edge.
-- Price trapped in tight horizontal consolidation with low volume.
-
-OUTPUT FORMAT (STRICT JSON ONLY - observations MUST come first to ground your analysis):
+OUTPUT FORMAT (STRICT JSON ONLY):
 {
   "is_chart_detected": true,
   "chart_observations": {
@@ -392,18 +384,17 @@ OUTPUT FORMAT (STRICT JSON ONLY - observations MUST come first to ground your an
     "candle_size": "LARGE_BODY" | "MEDIUM_BODY" | "SMALL_OR_DOJI",
     "key_level_interaction": "BOUNCING_FROM_SUPPORT" | "REJECTED_AT_RESISTANCE" | "BREAKOUT_SUPPORT" | "BREAKOUT_RESISTANCE" | "MID_CHANNEL_NO_LEVEL"
   },
-  "candle_pattern_found": "Hammer / Bullish Pin Bar" | "Shooting Star" | "Bullish Engulfing" | "Bearish Engulfing" | "Morning Star" | "Evening Star" | "Green Momentum" | "Red Momentum" | "None",
+  "candle_pattern_found": "Hammer / Bullish Pin Bar" | "Shooting Star" | "Bullish Engulfing" | "Bearish Engulfing" | "Morning Star" | "Evening Star" | "Momentum Continuation" | "Doji / Indecision" | "None",
   "trend": "Bullish" | "Bearish" | "Sideways",
-  "primary_signal": "Concise summary of trigger (e.g. 'Strong Lower Wick Rejection at Support Level' or 'Shooting Star Rejection at Resistance')",
+  "primary_signal": "Concise trigger summary (e.g. 'Hammer bounce off support' or 'Shooting star rejection at resistance' or 'Mid-channel consolidation')",
   "confirmations": [
-    "Specific confirmation 1 (e.g. 'Long lower wick indicates aggressive buyer absorption')",
-    "Specific confirmation 2 (e.g. 'Reaction off horizontal support line')",
-    "Specific confirmation 3 (e.g. 'Bullish momentum following consolidation')"
+    "Observation 1 (candle color & wick state)",
+    "Observation 2 (support/resistance interaction or range location)"
   ],
   "prediction": "UP" | "DOWN" | "UNCERTAIN",
-  "confidence": 75-95,
+  "confidence": 50-95,
   "sr_zone": "Support Zone" | "Resistance Zone" | "None",
-  "fvg_detected": true | false,
+  "fvg_detected": false,
   "risk_level": "LOW" | "MEDIUM" | "HIGH",
   "advice": "ENTER NOW (CALL / UP)" | "ENTER NOW (PUT / DOWN)" | "WAIT FOR CLEAR SIGNAL"
 }
