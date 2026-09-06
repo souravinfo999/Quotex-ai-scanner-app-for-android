@@ -252,9 +252,11 @@ class PredictionPopupView(
             )
         } else {
             val items = mutableListOf<String>()
-            if (result.fvgDetected) items.add("FVG Detected")
+            if (result.hasOrderBlock) items.add(if (result.orderBlockZone.contains("Bullish")) "Bullish OB" else "Bearish OB")
+            if (result.fvgDetected) items.add("FVG Imbalance")
+            if (result.hasLiquiditySweep) items.add(if (result.liquiditySweep.contains("SSL")) "SSL Sweep" else "BSL Sweep")
+            if (result.candlePatternFound != "None") items.add(result.candlePatternFound)
             items.add(if (result.isUp) "HH-HL Trend" else if (result.isDown) "LH-LL Trend" else "Sideways")
-            items.add(if (result.candlePatternFound != "None") result.candlePatternFound else "Wick Reject")
             items.add("${result.riskLevel} Risk")
             items
         }

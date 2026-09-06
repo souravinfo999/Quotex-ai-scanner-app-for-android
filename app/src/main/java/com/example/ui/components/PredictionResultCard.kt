@@ -231,19 +231,39 @@ fun PredictionResultCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                if (result.hasOrderBlock) {
+                    MiniBadge(text = if (result.orderBlockZone.contains("Bullish")) "🛡️ Bullish OB" else "🛡️ Bearish OB")
+                }
+                if (result.fvgDetected) {
+                    MiniBadge(text = "⚡ FVG")
+                }
+                if (result.hasLiquiditySweep) {
+                    MiniBadge(text = if (result.liquiditySweep.contains("SSL")) "🎯 SSL Sweep" else "🎯 BSL Sweep")
+                }
                 MiniBadge(text = "Trend: ${result.trend}")
                 MiniBadge(text = "Risk: ${result.riskLevel}")
-                MiniBadge(text = result.advice)
             }
 
             // Expandable details (Confirmations & Outcome tracking)
             AnimatedVisibility(visible = expanded) {
                 Column(modifier = Modifier.padding(top = 10.dp)) {
-                    if (result.candlePatternFound != "None") {
+                    if (result.candlePatternFound != "None" || result.srZone != "None") {
                         Text(
-                            text = "Candlestick Pattern: ${result.candlePatternFound} • S/R: ${result.srZone}",
+                            text = "Pattern: ${result.candlePatternFound} • Zone: ${result.srZone}",
                             fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = PrimaryTeal
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    if (result.hasOrderBlock || result.hasLiquiditySweep) {
+                        Text(
+                            text = buildString {
+                                if (result.hasOrderBlock) append("OB: ${result.orderBlockZone}  ")
+                                if (result.hasLiquiditySweep) append("Sweep: ${result.liquiditySweep}")
+                            },
+                            fontSize = 11.sp,
+                            color = TextSecondary
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                     }

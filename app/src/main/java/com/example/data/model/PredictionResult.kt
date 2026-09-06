@@ -10,6 +10,8 @@ data class PredictionResult(
     val candlePatternFound: String = "None",
     val srZone: String = "None",
     val fvgDetected: Boolean = false,
+    val orderBlockZone: String = "None", // "Bullish Order Block (Demand)", "Bearish Order Block (Supply)", "None"
+    val liquiditySweep: String = "None", // "SSL Swept", "BSL Swept", "None"
     val trend: String = "Sideways",
     val riskLevel: String = "MEDIUM", // "LOW", "MEDIUM", "HIGH"
     val advice: String = "Wait", // "Enter now", "Wait", "Avoid"
@@ -21,6 +23,8 @@ data class PredictionResult(
     val isDown: Boolean get() = prediction.equals("DOWN", ignoreCase = true)
     val isNoChart: Boolean get() = !isChartDetected || prediction.equals("NO_CHART", ignoreCase = true)
     val isUncertain: Boolean get() = !isUp && !isDown && !isNoChart
+    val hasOrderBlock: Boolean get() = !orderBlockZone.equals("None", ignoreCase = true) && orderBlockZone.isNotBlank()
+    val hasLiquiditySweep: Boolean get() = !liquiditySweep.equals("None", ignoreCase = true) && liquiditySweep.isNotBlank()
 }
 
 data class ScanSettings(

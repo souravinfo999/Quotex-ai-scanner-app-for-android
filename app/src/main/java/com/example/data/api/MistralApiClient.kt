@@ -268,49 +268,112 @@ class MistralApiClient {
             }
         }
 
-        val srZone = json.optString("sr_zone", if (prediction == "UP") "Support Level" else if (prediction == "DOWN") "Resistance Level" else "None")
-        val fvgDetected = json.optBoolean("fvg_detected", false)
-        val trend = json.optString("trend", if (prediction == "NO_CHART") "None" else if (prediction == "UP") "Bullish" else if (prediction == "DOWN") "Bearish" else "Sideways")
-        val riskLevel = json.optString("risk_level", when (prediction) {
+        val srZone = json.optString("sr_zone", if (prediction == "UP") "Support / Demand Zone" else if (prediction == "DOWN") "Resistance / Supply Zone" else "None")
+        
+        // SMC: Fair Value Gap (FVG)
+        val rawFvgType = json.optString("fvg_type", "NONE").uppercase()
+        val fvgDetected = json.optBoolean("fvg_detected", false) || (rawFvgType != "NONE" && rawFvgType.contains("FVG"))
+        
+        // SMC: Order Block (OB)
+        val rawOb = json.optString("order_block", "NONE").uppercase()
+        val orderBlockZone = when {
+            rawOb.contains("BULLISH") || rawOb.contains("DEMAND") -> "Bullish Order Block (Demand)"
+            rawOb.contains("BEARISH") || rawOb.contains("SUPPLY") -> "Bearish Order Block (Supply)"
+            else -> "None"
+        }
+
+        // SMC: Liquidity Sweep (BSL / SSL)
+        val rawSweep = json.optString("liquidity_sweep", "NONE").uppercase()
+        val liquiditySweep = when {
+            rawSweep.contains("SSL") || rawSweep.contains("SELL_SIDE") -> "Sell-Side Liquidity Swept (SSL)"
+            rawSweep.contains("BSL") || rawSweep.contains("BUY_SIDE") -> "Buy-Side Liquidity Swept (BSL)"
+            else -> "None"
+        }
+
+        // Accurate Trend Extraction:
+        val marketStructure = observations?.optString("market_structure", "")?.uppercase() ?: ""
+        var trend = json.optString("trend", "").trim()
+        if (trend.isBlank() || trend.equals("None", ignoreCase = true)) {
+            trend = when {
+                prediction == "NO_CHART" -> "None"
+                marketStructure.contains("BEARISH") || marketStructure.contains("LH_LL") -> "Bearish"
+                marketStructure.contains("BULLISH") || marketStructure.contains("HH_HL") -> "Bullish"
+                else -> "Sideways"
+            }
+        }
+
+        val isDowntrend = trend.equals("Bearish", ignoreCase = true) ||
+                marketStructure.contains("BEARISH") || marketStructure.contains("LH_LL")
+        val isUptrend = trend.equals("Bullish", ignoreCase = true) ||
+                marketStructure.contains("BULLISH") || marketStructure.contains("HH_HL")
+
+        // --- STRICT PRO-TREND ENFORCEMENT ENGINE ---
+        // Rule: NEVER trade counter-trend against strong market momentum!
+        // In a Downtrend: Only DOWN trades or UNCERTAIN (WAIT) are allowed. Counter-trend UP calls are blocked.
+        var finalPrediction = prediction
+        var finalConfidence = confidence
+        var finalPrimarySignal = primarySignal
+        var finalAdvice = advice
+
+        if (isDowntrend && finalPrediction == "UP") {
+            finalPrediction = "UNCERTAIN"
+            finalConfidence = (finalConfidence - 25).coerceIn(45, 65)
+            finalPrimarySignal = "Counter-Trend Filter: Strong Downtrend Active (Counter-trend CALL blocked)"
+            finalAdvice = "WAIT FOR PRO-TREND SIGNAL"
+            confirmationsList.add(0, "Major trend is Bearish (Lower Highs & Lower Lows)")
+            confirmationsList.add(1, "Pro-Trend rule: Never trade UP against an active downtrend")
+            confirmationsList.add(2, "Wait for pullback to resistance for a high-probability DOWN trade")
+        } else if (isUptrend && finalPrediction == "DOWN") {
+            finalPrediction = "UNCERTAIN"
+            finalConfidence = (finalConfidence - 25).coerceIn(45, 65)
+            finalPrimarySignal = "Counter-Trend Filter: Strong Uptrend Active (Counter-trend PUT blocked)"
+            finalAdvice = "WAIT FOR PRO-TREND SIGNAL"
+            confirmationsList.add(0, "Major trend is Bullish (Higher Highs & Higher Lows)")
+            confirmationsList.add(1, "Pro-Trend rule: Never trade DOWN against an active uptrend")
+            confirmationsList.add(2, "Wait for pullback to support for a high-probability UP trade")
+        }
+
+        val riskLevel = json.optString("risk_level", when (finalPrediction) {
             "UP", "DOWN" -> "LOW"
             "UNCERTAIN" -> "MEDIUM"
             else -> "HIGH"
         }).uppercase()
 
         return PredictionResult(
-            prediction = prediction,
-            isChartDetected = (prediction != "NO_CHART"),
-            confidence = confidence,
-            primarySignal = primarySignal,
+            prediction = finalPrediction,
+            isChartDetected = (finalPrediction != "NO_CHART"),
+            confidence = finalConfidence,
+            primarySignal = finalPrimarySignal,
             confirmations = confirmationsList,
             candlePatternFound = candlePattern,
             srZone = srZone,
             fvgDetected = fvgDetected,
+            orderBlockZone = orderBlockZone,
+            liquiditySweep = liquiditySweep,
             trend = trend,
             riskLevel = riskLevel,
-            advice = advice,
+            advice = finalAdvice,
             timestamp = System.currentTimeMillis()
         )
     }
 
     companion object {
         val SYSTEM_PROMPT = """
-You are an expert algorithmic binary options price action analyst specializing in 1-minute candlestick forecasting on Quotex, Pocket Option, and OTC trading charts.
+You are a disciplined algorithmic institutional Price Action & SMC analyst specializing in 1-minute binary options forecasting on Quotex, Pocket Option, and OTC charts.
 
-CRITICAL DIRECTIVE - INDEPENDENT & UNBIASED EVALUATION:
-- Analyze THIS screenshot purely on its own merits from scratch.
-- DO NOT assume previous scans or reuse old assumptions.
-- DO NOT default to always "UP".
-- DO NOT default to always "DOWN".
-- DO NOT default to always "UNCERTAIN".
-- Follow this exact rule:
-  * If the chart has clear Bullish price action -> Forecast "UP" with high confidence.
-  * If the chart has clear Bearish price action -> Forecast "DOWN" with high confidence.
-  * If the chart is trapped in consolidation, has a Doji, has equal wicks, or lacks a clear edge -> Forecast "UNCERTAIN", assign lower confidence (< 70), and advise "WAIT FOR CLEAR SIGNAL".
+### #1 GOLDEN RULE: "THE TREND IS YOUR FRIEND" (STRICT PRO-TREND TRADING):
+Binary options traders LOSE money when they try to catch tops and bottoms against a strong trend.
+- In a DOWNTREND: ONLY forecast "DOWN" (PUT / Red candle continuation or resistance rejection), OR forecast "UNCERTAIN" (Wait). NEVER forecast "UP" against a strong downtrend!
+- In an UPTREND: ONLY forecast "UP" (CALL / Green candle continuation or support bounce), OR forecast "UNCERTAIN" (Wait). NEVER forecast "DOWN" against a strong uptrend!
+- If conditions do not align with the trend: DO NOT FORCE A TRADE. Forecast "UNCERTAIN" and advise "WAIT FOR CLEAR SIGNAL".
+
+### ELIMINATE "UP" BIAS (50/50 SYMMETRICAL TRADING):
+- Do NOT favor "UP" over "DOWN". Put (DOWN) signals are equally frequent and profitable!
+- When prices are falling and red candles are dominant, you MUST confidently forecast "DOWN".
 
 STEP 0: SCREENSHOT VERIFICATION:
-Check if this screenshot contains an active financial candlestick trading chart (Quotex, Pocket Option, TradingView, green/red candles on a grid).
-If the screenshot shows a browser, home screen, settings, or non-trading app:
+Verify this screenshot contains an active financial candlestick trading chart (Quotex, Pocket Option, TradingView, green/red candles on a grid).
+If the screenshot shows a browser without chart, home screen, settings, camera, or non-trading app:
 Return IMMEDIATELY:
 {
   "is_chart_detected": false,
@@ -319,8 +382,13 @@ Return IMMEDIATELY:
     "candle_before_last_color": "NONE",
     "wick_rejection_type": "NONE",
     "candle_size": "NONE",
+    "market_structure": "NONE",
     "key_level_interaction": "NONE"
   },
+  "fvg_detected": false,
+  "fvg_type": "NONE",
+  "order_block": "NONE",
+  "liquidity_sweep": "NONE",
   "candle_pattern_found": "None",
   "trend": "None",
   "primary_signal": "No financial trading chart found on this screen.",
@@ -331,48 +399,65 @@ Return IMMEDIATELY:
   "prediction": "NO_CHART",
   "confidence": 0,
   "sr_zone": "None",
-  "fvg_detected": false,
   "risk_level": "HIGH",
   "advice": "OPEN TRADING CHART & TRY AGAIN"
 }
 
-STEP 1: VISUAL INSPECTION (PRICE ACTION ONLY):
-1. Candlestick on Far Right (Most recent closed candle next to price line):
-   - GREEN / CYAN: Price closed higher than opened.
-   - RED / ORANGE: Price closed lower than opened.
-   - DOJI: Flat thin line, open equals close.
-2. Wick Rejections:
-   - Long LOWER wick: Buyers pushed price up from lows (bullish defense).
-   - Long UPPER wick: Sellers pushed price down from highs (bearish defense).
-   - Equal or No wicks: Indecision or pure momentum.
-3. Ignore broker UI buttons (Ignore the big green/red Call/Put buttons on the screen). Look ONLY at the candles on the chart grid.
+STEP 1: MACRO TREND IDENTIFICATION (FULL CHART VIEW):
+1. LOOK AT THE WHOLE CHART FROM LEFT TO RIGHT:
+   - Compare the price on the LEFT of the chart to the price on the RIGHT (current price):
+   - If the price on the left is HIGHER and the price on the right is LOWER (candles cascading down in a series of Lower Highs and Lower Lows):
+     -> THIS IS A DOWNTREND! Set trend: "Bearish", market_structure: "BEARISH_LH_LL".
+     -> DO NOT classify a falling chart as "Sideways"!
+   - If the price on the left is LOWER and the price on the right is HIGHER (candles climbing up in Higher Highs and Higher Lows):
+     -> THIS IS AN UPTREND! Set trend: "Bullish", market_structure: "BULLISH_HH_HL".
+   - Only if price has oscillated strictly horizontally between the same top and bottom ceiling is it "Sideways".
 
-STEP 2: SYMMETRICAL 3-WAY DECISION RULES:
+2. CRITICAL WARNING: MOBILE BROKER VIEWPORT & BUTTONS:
+   - In Quotex mobile, when price drops, candles appear near the bottom of the screen. DO NOT MISTAKE THE BOTTOM OF THE SCREEN FOR A "SUPPORT LEVEL"! It is a crashing market making new lows.
+   - At the bottom of Quotex there are large green "Up" and red "Down" trade buttons. IGNORE THOSE BUTTONS COMPLETELY. Look ONLY at the candlestick candles in the chart grid.
 
-A. PREDICT "UP" (Call / Green candle expected) WHEN:
-- Clean bounce from a Support line or lower band with prominent lower wick.
-- Bullish Hammer / Pin Bar at support.
-- Bullish Engulfing (current green body fully covers previous red body).
-- Consecutive strong green momentum candles breaking above a range.
--> confidence: 75 to 92
--> advice: "ENTER NOW (CALL / UP)"
+STEP 2: SMC & PRICE ACTION OBSERVATIONS:
+1. Candlestick on Far Right (Most recent closed candle):
+   - Color: GREEN / CYAN (Bullish) vs RED / ORANGE (Bearish) vs DOJI.
+   - Wick Rejection: Long LOWER wick (buyer defense) vs Long UPPER wick (seller defense) vs Equal wicks.
+2. Fair Value Gap (FVG):
+   - Bullish FVG: 3-candle imbalance. Price retraces into gap and bounces UP.
+   - Bearish FVG: 3-candle imbalance. Price pulls up into gap and rejects DOWN.
+3. Order Block (OB):
+   - Bullish OB (Demand): Last red candle before major rally. Retest = bounce UP.
+   - Bearish OB (Supply): Last green candle before major plunge. Retest = reject DOWN.
+4. Liquidity Sweeps:
+   - SSL Swept: Price pierced below swing low, grabbed stops, and snapped up with long lower wick.
+   - BSL Swept: Price spiked above swing high, grabbed stops, and dropped with long upper wick.
 
-B. PREDICT "DOWN" (Put / Red candle expected) WHEN:
-- Clean rejection from a Resistance line or upper band with prominent upper wick.
-- Shooting Star / Bearish Pin Bar at resistance.
-- Bearish Engulfing (current red body fully covers previous green body).
-- Consecutive strong red momentum candles breaking below a range.
--> confidence: 75 to 92
+STEP 3: PRO-TREND TRADING DECISIONS:
+
+A. FORECAST "DOWN" (Put / Red candle expected) WHEN:
+- Market is in a DOWNTREND (Bearish LH-LL) and:
+  * Red momentum continuation breaking below recent candle low.
+  * Price pulled back up to resistance or Bearish Order Block/FVG and rejected with upper wick.
+  * Bearish Engulfing or Shooting Star pattern.
+- Or Market in Range and cleanly rejected at Resistance ceiling.
+-> confidence: 78 to 92
 -> advice: "ENTER NOW (PUT / DOWN)"
 
-C. PREDICT "UNCERTAIN" (Wait / No Trade) WHEN:
-- Price is floating in the middle of a channel without touching Support or Resistance.
-- Candle is a Doji, spinning top, or has equal wicks on both top and bottom.
-- Conflicting signals (e.g. green candle hitting direct resistance without breakout, or red candle hitting direct support).
-- Low volatility, sideways chop, or uncertain market structure.
+B. FORECAST "UP" (Call / Green candle expected) WHEN:
+- Market is in an UPTREND (Bullish HH-HL) and:
+  * Green momentum continuation breaking above recent candle high.
+  * Price pulled back down to support or Bullish Order Block/FVG and bounced with lower wick.
+  * Bullish Engulfing or Hammer pattern.
+- Or Market in Range and cleanly bounced at Support floor.
+-> confidence: 78 to 92
+-> advice: "ENTER NOW (CALL / UP)"
+
+C. FORECAST "UNCERTAIN" (Wait / Avoid Counter-Trend) WHEN:
+- Market is in a DOWNTREND, but latest candle formed a green bounce or lower wick -> DO NOT CALL UP! Forecast "UNCERTAIN", advice: "WAIT FOR PULLBACK TO RESISTANCE".
+- Market is in an UPTREND, but latest candle formed a red pullback -> DO NOT CALL DOWN! Forecast "UNCERTAIN", advice: "WAIT FOR PULLBACK TO SUPPORT".
+- Candle is a Doji, spinning top, or trapped in tight chop.
 -> confidence: 45 to 65
 -> advice: "WAIT FOR CLEAR SIGNAL"
--> primary_signal: "Market Consolidating / Wait for Confirmation"
+-> primary_signal: "Counter-Trend or Choppy Market / Wait for Trend Alignment"
 
 OUTPUT FORMAT (STRICT JSON ONLY):
 {
@@ -382,19 +467,24 @@ OUTPUT FORMAT (STRICT JSON ONLY):
     "candle_before_last_color": "GREEN" | "RED",
     "wick_rejection_type": "LOWER_WICK_REJECTION" | "UPPER_WICK_REJECTION" | "EQUAL_WICKS" | "NO_WICKS",
     "candle_size": "LARGE_BODY" | "MEDIUM_BODY" | "SMALL_OR_DOJI",
-    "key_level_interaction": "BOUNCING_FROM_SUPPORT" | "REJECTED_AT_RESISTANCE" | "BREAKOUT_SUPPORT" | "BREAKOUT_RESISTANCE" | "MID_CHANNEL_NO_LEVEL"
+    "market_structure": "BEARISH_LH_LL" | "BULLISH_HH_HL" | "RANGE_SIDEWAYS",
+    "key_level_interaction": "BOUNCING_FROM_SUPPORT_OR_DEMAND" | "REJECTED_AT_RESISTANCE_OR_SUPPLY" | "MID_CHANNEL_NO_LEVEL"
   },
-  "candle_pattern_found": "Hammer / Bullish Pin Bar" | "Shooting Star" | "Bullish Engulfing" | "Bearish Engulfing" | "Morning Star" | "Evening Star" | "Momentum Continuation" | "Doji / Indecision" | "None",
+  "fvg_detected": true | false,
+  "fvg_type": "BULLISH_FVG" | "BEARISH_FVG" | "NONE",
+  "order_block": "BULLISH_ORDER_BLOCK" | "BEARISH_ORDER_BLOCK" | "NONE",
+  "liquidity_sweep": "SSL_SWEPT_BULLISH" | "BSL_SWEPT_BEARISH" | "NONE",
+  "candle_pattern_found": "Hammer / Bullish Pin Bar" | "Shooting Star" | "Bullish Engulfing" | "Bearish Engulfing" | "Morning Star" | "Evening Star" | "Doji / Indecision" | "None",
+  "sr_zone": "Support / Demand Zone" | "Resistance / Supply Zone" | "Round Number Level" | "None",
   "trend": "Bullish" | "Bearish" | "Sideways",
-  "primary_signal": "Concise trigger summary (e.g. 'Hammer bounce off support' or 'Shooting star rejection at resistance' or 'Mid-channel consolidation')",
+  "primary_signal": "Concise trigger summary (e.g. 'Bearish Trend Continuation with Red Momentum' or 'Bearish Rejection at Order Block')",
   "confirmations": [
-    "Observation 1 (candle color & wick state)",
-    "Observation 2 (support/resistance interaction or range location)"
+    "Observation 1 (macro trend alignment)",
+    "Observation 2 (candle color & wick rejection)",
+    "Observation 3 (SMC structure or S/R zone)"
   ],
   "prediction": "UP" | "DOWN" | "UNCERTAIN",
   "confidence": 50-95,
-  "sr_zone": "Support Zone" | "Resistance Zone" | "None",
-  "fvg_detected": false,
   "risk_level": "LOW" | "MEDIUM" | "HIGH",
   "advice": "ENTER NOW (CALL / UP)" | "ENTER NOW (PUT / DOWN)" | "WAIT FOR CLEAR SIGNAL"
 }
