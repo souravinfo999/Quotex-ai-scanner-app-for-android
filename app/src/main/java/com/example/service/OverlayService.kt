@@ -13,6 +13,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import com.example.data.model.PredictionResult
@@ -156,10 +157,6 @@ class OverlayService : Service() {
         if (isAnalyzing) return
 
         val settings = repository.getSettings()
-
-        // Activate visual indicators: Floating button spin + Screen Cyber Laser HUD
-        floatingButton?.setScanningState(true)
-        laserOverlay?.show()
         predictionPopup?.let { removePredictionPopup() }
         isAnalyzing = true
 
@@ -176,7 +173,21 @@ class OverlayService : Service() {
                 }
 
                 if (ScreenshotHelper.isReady) {
+                    // Temporarily hide floating button to capture 100% clean, unobstructed chart
+                    withContext(Dispatchers.Main) {
+                        floatingButton?.visibility = View.INVISIBLE
+                        laserOverlay?.dismiss()
+                    }
+                    delay(80) // Allow window compositor to flush the frame
+
                     val captureResult = ScreenshotHelper.captureScreen(this@OverlayService)
+
+                    // Immediately restore floating button and activate scanning HUD animation
+                    withContext(Dispatchers.Main) {
+                        floatingButton?.visibility = View.VISIBLE
+                        floatingButton?.setScanningState(true)
+                        laserOverlay?.show()
+                    }
 
                     if (captureResult.isSuccess) {
                         val bitmap = captureResult.getOrThrow()
@@ -197,6 +208,7 @@ class OverlayService : Service() {
                         }
                     } else {
                         withContext(Dispatchers.Main) {
+                            floatingButton?.visibility = View.VISIBLE
                             floatingButton?.setScanningState(false)
                             laserOverlay?.dismiss()
                             isAnalyzing = false
@@ -206,6 +218,7 @@ class OverlayService : Service() {
                     }
                 } else {
                     withContext(Dispatchers.Main) {
+                        floatingButton?.visibility = View.VISIBLE
                         floatingButton?.setScanningState(false)
                         laserOverlay?.dismiss()
                         isAnalyzing = false
@@ -214,6 +227,7 @@ class OverlayService : Service() {
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
+                    floatingButton?.visibility = View.VISIBLE
                     floatingButton?.setScanningState(false)
                     laserOverlay?.dismiss()
                     isAnalyzing = false

@@ -131,8 +131,8 @@ class ScannerRepository(context: Context) {
     }
 
     private fun encodeBitmapToBase64(bitmap: Bitmap): String {
-        // Scale down if too large to ensure fast network upload & low token cost
-        val maxDimension = 1024
+        // High resolution for clear candle wick and body detection
+        val maxDimension = 1600
         val scaledBitmap = if (bitmap.width > maxDimension || bitmap.height > maxDimension) {
             val ratio = Math.min(
                 maxDimension.toFloat() / bitmap.width,
@@ -146,7 +146,7 @@ class ScannerRepository(context: Context) {
         }
 
         val outputStream = ByteArrayOutputStream()
-        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 92, outputStream)
         val byteArray = outputStream.toByteArray()
         return Base64.encodeToString(byteArray, Base64.NO_WRAP)
     }
