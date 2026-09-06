@@ -3,18 +3,20 @@ package com.example.ui.overlay
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.Shader
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
+import com.example.R
 import kotlin.math.hypot
 
 @SuppressLint("ViewConstructor")
@@ -73,8 +75,16 @@ class FloatingButtonView(
     private var scanAnimator: ValueAnimator? = null
     private var touchScale = 1.0f
 
+    // Cached Logo Bitmap
+    private var logoBitmap: Bitmap? = null
+
     init {
         setWillNotDraw(false)
+        try {
+            logoBitmap = BitmapFactory.decodeResource(resources, R.drawable.ic_quotex_logo)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun setScanningState(scanning: Boolean) {
@@ -108,35 +118,44 @@ class FloatingButtonView(
         canvas.save()
         canvas.scale(touchScale, touchScale, cx, cy)
 
-        val pad = dpToPx(4f)
-        val rect = RectF(pad, pad, w - pad, h - pad)
-        val cornerRadius = dpToPx(20f) // rounded-3xl
+        val pad = dpToPx(3f)
+        val radius = (w / 2f) - pad
 
-        // Professional Polish: bg-gradient-to-tr from-[#7B61FF] to-[#00D4AA]
-        val gradient = LinearGradient(
-            0f, h, w, 0f,
-            intArrayOf(Color.parseColor("#7B61FF"), Color.parseColor("#00D4AA")),
-            floatArrayOf(0f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        bgPaint.shader = gradient
-        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, bgPaint)
+        // 1. Dark circular shadow base
+        bgPaint.color = Color.BLACK
+        canvas.drawCircle(cx, cy, radius, bgPaint)
 
-        // Outer crisp border: border-white/20
-        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, borderPaint)
+        // 2. Draw user's round logo if available
+        val bm = logoBitmap
+        if (bm != null && !bm.isRecycled) {
+            val srcRect = Rect(0, 0, bm.width, bm.height)
+            val destRect = RectF(pad, pad, w - pad, h - pad)
+            val path = android.graphics.Path().apply {
+                addCircle(cx, cy, radius, android.graphics.Path.Direction.CW)
+            }
+            canvas.save()
+            canvas.clipPath(path)
+            val bmpPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            canvas.drawBitmap(bm, srcRect, destRect, bmpPaint)
+            canvas.restore()
+        } else {
+            // Fallback: draw vector scanner icon
+            drawScannerIcon(canvas, cx, cy)
+        }
 
-        // Scanning rotating arc indicator
+        // 3. Crisp Neon Green Border Rim (Round Logo Theme)
+        borderPaint.color = Color.parseColor("#00E676")
+        borderPaint.strokeWidth = dpToPx(2.2f)
+        canvas.drawCircle(cx, cy, radius, borderPaint)
+
+        // 4. Scanning rotating radar arc indicator
         if (isScanning) {
             val arcRect = RectF(pad + dpToPx(1f), pad + dpToPx(1f), w - pad - dpToPx(1f), h - pad - dpToPx(1f))
-            // Dual glowing scanning arcs
             progressPaint.color = Color.parseColor("#00E676")
             canvas.drawArc(arcRect, scanRotation, 110f, false, progressPaint)
             progressPaint.color = Color.parseColor("#00D4AA")
             canvas.drawArc(arcRect, scanRotation + 180f, 90f, false, progressPaint)
         }
-
-        // Center Robot / Candlesticks Icon
-        drawScannerIcon(canvas, cx, cy)
 
         canvas.restore()
     }

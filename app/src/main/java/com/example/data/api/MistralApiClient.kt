@@ -178,21 +178,32 @@ class MistralApiClient {
 
         val json = JSONObject(cleanJson)
 
-        var prediction = json.optString("prediction", "UNCERTAIN").uppercase()
-        if (prediction != "UP" && prediction != "DOWN") {
-            prediction = "UNCERTAIN"
+        val isChartDetected = json.optBoolean("is_chart_detected", true)
+        var rawPrediction = json.optString("prediction", "UNCERTAIN").uppercase()
+
+        var prediction = if (!isChartDetected || rawPrediction == "NO_CHART" || rawPrediction.contains("NOT_FOUND") || rawPrediction.contains("NO_CHART")) {
+            "NO_CHART"
+        } else if (rawPrediction == "UP" || rawPrediction == "DOWN") {
+            rawPrediction
+        } else {
+            "UNCERTAIN"
         }
 
-        var confidence = json.optInt("confidence", 50)
+        var confidence = json.optInt("confidence", if (prediction == "NO_CHART") 0 else 50)
         if (confidence < 0) confidence = 0
         if (confidence > 100) confidence = 100
 
-        // If confidence is below threshold, mark as UNCERTAIN as required
-        if (confidence < threshold && prediction != "UNCERTAIN") {
+        // If confidence is below threshold, mark as UNCERTAIN (unless NO_CHART)
+        if (prediction != "NO_CHART" && confidence < threshold && prediction != "UNCERTAIN") {
             prediction = "UNCERTAIN"
         }
 
-        val primarySignal = json.optString("primary_signal", "Price Action analysis at Key Level")
+        val defaultPrimary = if (prediction == "NO_CHART") {
+            "No trading candlestick chart detected. Please open Quotex or trading screen and scan again."
+        } else {
+            "Price Action analysis at Key Level"
+        }
+        val primarySignal = json.optString("primary_signal", defaultPrimary)
         val confirmationsList = mutableListOf<String>()
         val confirmationsArray = json.optJSONArray("confirmations")
         if (confirmationsArray != null) {
@@ -201,16 +212,27 @@ class MistralApiClient {
                 if (conf.isNotBlank()) confirmationsList.add(conf)
             }
         }
+        if (prediction == "NO_CHART" && confirmationsList.isEmpty()) {
+            confirmationsList.add("No financial candlesticks found")
+            confirmationsList.add("Screen displays non-chart content")
+            confirmationsList.add("Open Quotex/Trading platform and re-scan")
+        }
 
         val candlePattern = json.optString("candle_pattern_found", "None")
         val srZone = json.optString("sr_zone", "None")
         val fvgDetected = json.optBoolean("fvg_detected", false)
-        val trend = json.optString("trend", "Sideways")
-        val riskLevel = json.optString("risk_level", "MEDIUM").uppercase()
-        val advice = json.optString("advice", if (prediction == "UNCERTAIN") "Wait for clearer signal" else "Enter now")
+        val trend = json.optString("trend", if (prediction == "NO_CHART") "None" else "Sideways")
+        val riskLevel = json.optString("risk_level", if (prediction == "NO_CHART") "HIGH" else "MEDIUM").uppercase()
+        val defaultAdvice = when (prediction) {
+            "NO_CHART" -> "OPEN TRADING CHART & TRY AGAIN"
+            "UNCERTAIN" -> "WAIT FOR CLEAR SIGNAL"
+            else -> "ENTER NOW"
+        }
+        val advice = json.optString("advice", defaultAdvice)
 
         return PredictionResult(
             prediction = prediction,
+            isChartDetected = (prediction != "NO_CHART"),
             confidence = confidence,
             primarySignal = primarySignal,
             confirmations = confirmationsList,
@@ -228,8 +250,33 @@ class MistralApiClient {
         val SYSTEM_PROMPT = """
 You are a senior algorithmic and price action binary options analyst specializing in 1-minute candlestick forecasting on Quotex and OTC trading platforms.
 
-YOUR TASK:
-Examine the trading chart screenshot and predict the direction of the IMMEDIATE NEXT CANDLE: "UP" (Call), "DOWN" (Put), or "UNCERTAIN".
+YOUR PRIMARY VERIFICATION (STEP 0 - STRICT):
+Before analyzing, verify if this screenshot actually contains a real financial trading candlestick chart (e.g., Quotex, Pocket Option, TradingView, MetaTrader, Binomo, green/red Japanese candlesticks, price graph and numbers).
+
+CASE A: NO TRADING CHART DETECTED
+If this screenshot is a web browser (e.g. Chrome, articles, Scribd, search results), social media, home screen, settings, book, document, camera, or any non-trading screen:
+You MUST IMMEDIATELY return:
+{
+  "is_chart_detected": false,
+  "prediction": "NO_CHART",
+  "confidence": 0,
+  "primary_signal": "No trading chart or candlestick graph found on this screen.",
+  "confirmations": [
+    "No financial candlestick chart detected",
+    "Screen displays non-trading app or text document",
+    "Please open Quotex or your trading platform to scan"
+  ],
+  "candle_pattern_found": "None",
+  "sr_zone": "None",
+  "fvg_detected": false,
+  "trend": "None",
+  "risk_level": "HIGH",
+  "advice": "OPEN TRADING CHART & TRY AGAIN"
+}
+DO NOT hallucinate or imagine candlesticks or fake trading signals on a non-trading screen!
+
+CASE B: REAL FINANCIAL CANDLESTICK CHART DETECTED
+If a genuine trading chart with candlesticks IS present, set "is_chart_detected": true and predict the IMMEDIATE NEXT CANDLE: "UP" (Call), "DOWN" (Put), or "UNCERTAIN".
 
 CRITICAL FOCUS & CHART GEOMETRY:
 1. FOCUS ON THE RIGHTMOST ACTIVE CANDLE:
@@ -266,7 +313,8 @@ DECISION PROTOCOL:
 
 OUTPUT STRICT JSON ONLY (no markdown fences, no explanatory text outside the JSON):
 {
-  "prediction": "UP" | "DOWN" | "UNCERTAIN",
+  "is_chart_detected": true | false,
+  "prediction": "UP" | "DOWN" | "UNCERTAIN" | "NO_CHART",
   "confidence": 60-95,
   "primary_signal": "Concise summary of the key trigger (e.g. 'Lower Wick Support Bounce at Round Level' or 'Shooting Star Rejection at Resistance')",
   "confirmations": [
@@ -277,9 +325,9 @@ OUTPUT STRICT JSON ONLY (no markdown fences, no explanatory text outside the JSO
   "candle_pattern_found": "Name of the detected pattern (e.g. 'Hammer', 'Shooting Star', 'Bullish Engulfing', 'Bearish Engulfing', 'None')",
   "sr_zone": "Support" | "Resistance" | "None",
   "fvg_detected": true | false,
-  "trend": "Bullish" | "Bearish" | "Sideways",
+  "trend": "Bullish" | "Bearish" | "Sideways" | "None",
   "risk_level": "LOW" | "MEDIUM" | "HIGH",
-  "advice": "ENTER NOW (CALL / UP)" | "ENTER NOW (PUT / DOWN)" | "WAIT FOR CLEAR SIGNAL"
+  "advice": "ENTER NOW (CALL / UP)" | "ENTER NOW (PUT / DOWN)" | "WAIT FOR CLEAR SIGNAL" | "OPEN TRADING CHART & TRY AGAIN"
 }
 """.trimIndent()
     }

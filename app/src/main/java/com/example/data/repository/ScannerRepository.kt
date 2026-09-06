@@ -71,8 +71,10 @@ class ScannerRepository(context: Context) {
         val apiResult = apiClient.analyzeChart(base64, settings)
         if (apiResult.isSuccess) {
             val result = apiResult.getOrThrow()
-            // Save to database
-            saveScan(result)
+            // Save to database only if a genuine chart was detected
+            if (!result.isNoChart) {
+                saveScan(result)
+            }
             Result.success(result)
         } else {
             apiResult

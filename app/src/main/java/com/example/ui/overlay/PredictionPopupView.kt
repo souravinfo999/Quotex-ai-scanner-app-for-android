@@ -56,9 +56,10 @@ class PredictionPopupView(
         containerLayout.removeAllViews()
 
         // Exact Professional Polish gradients
-        val (bgStart, bgEnd, icon, titleText, pulseColor) = when (result.prediction.uppercase()) {
-            "UP" -> Quintuple("#00C853", "#00E676", "📈", "NEXT: UP", "#00E676")
-            "DOWN" -> Quintuple("#FF3D00", "#FF6E40", "📉", "NEXT: DOWN", "#FF3D00")
+        val (bgStart, bgEnd, icon, titleText, pulseColor) = when {
+            result.isNoChart -> Quintuple("#FF8F00", "#FF6F00", "📊❌", "NO CHART FOUND", "#FF6F00")
+            result.isUp -> Quintuple("#00C853", "#00E676", "📈", "NEXT: UP", "#00E676")
+            result.isDown -> Quintuple("#FF3D00", "#FF6E40", "📉", "NEXT: DOWN", "#FF3D00")
             else -> Quintuple("#FFB300", "#FFD54F", "⚠️", "NEXT: UNCERTAIN", "#FFB300")
         }
 
@@ -90,7 +91,7 @@ class PredictionPopupView(
         }
 
         val aiSignalBadge = TextView(context).apply {
-            text = "AI SIGNAL"
+            text = if (result.isNoChart) "CHART NOTICE" else "AI SIGNAL"
             textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
@@ -115,7 +116,7 @@ class PredictionPopupView(
         tagRow.addView(scanIdTv)
 
         val timerTv = TextView(context).apply {
-            text = " • 5s"
+            text = if (result.isNoChart) " • 6s" else " • 5s"
             textSize = 10f
             typeface = Typeface.MONOSPACE
             setTextColor(Color.parseColor("#AA000000"))
@@ -126,8 +127,8 @@ class PredictionPopupView(
 
         // Large 3xl font-black italic tracking-tighter title
         val titleTv = TextView(context).apply {
-            text = "$icon $titleText"
-            textSize = 28f
+            text = if (result.isNoChart) "📊 NO CHART FOUND" else "$icon $titleText"
+            textSize = if (result.isNoChart) 23f else 28f
             setTypeface(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
             setTextColor(Color.BLACK)
             setPadding(0, dpToPx(4), 0, 0)
@@ -162,7 +163,7 @@ class PredictionPopupView(
             gravity = Gravity.CENTER_VERTICAL
         }
         val confLabel = TextView(context).apply {
-            text = "ACCURACY CONFIDENCE"
+            text = if (result.isNoChart) "CHART STATUS" else "ACCURACY CONFIDENCE"
             textSize = 11f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.BLACK)
@@ -170,7 +171,7 @@ class PredictionPopupView(
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         }
         val confBadge = TextView(context).apply {
-            text = "${result.confidence}%"
+            text = if (result.isNoChart) "NOT FOUND" else "${result.confidence}%"
             textSize = 11f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.BLACK)
@@ -187,23 +188,25 @@ class PredictionPopupView(
         containerLayout.addView(confRow)
 
         // Confidence progress track (h-3 bg-black/10 rounded-full p-0.5 with black fill)
-        val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100
-            progress = result.confidence
-            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(10)).apply {
-                topMargin = dpToPx(4)
+        if (!result.isNoChart) {
+            val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+                max = 100
+                progress = result.confidence
+                val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(10)).apply {
+                    topMargin = dpToPx(4)
+                }
+                layoutParams = lp
+                progressDrawable = GradientDrawable().apply {
+                    cornerRadius = dpToPx(5).toFloat()
+                    setColor(Color.BLACK)
+                }
+                background = GradientDrawable().apply {
+                    cornerRadius = dpToPx(5).toFloat()
+                    setColor(Color.parseColor("#26000000"))
+                }
             }
-            layoutParams = lp
-            progressDrawable = GradientDrawable().apply {
-                cornerRadius = dpToPx(5).toFloat()
-                setColor(Color.BLACK)
-            }
-            background = GradientDrawable().apply {
-                cornerRadius = dpToPx(5).toFloat()
-                setColor(Color.parseColor("#26000000"))
-            }
+            containerLayout.addView(progressBar)
         }
-        containerLayout.addView(progressBar)
 
         addSpace(12)
 
@@ -219,11 +222,15 @@ class PredictionPopupView(
             }
         }
         val signalTv = TextView(context).apply {
-            text = "🎯 Primary Signal: ${result.primarySignal}"
+            text = if (result.isNoChart) {
+                "⚠️ Chart nothing founded!\n\nPlease open Quotex or your trading candlestick chart screen and try again."
+            } else {
+                "🎯 Primary Signal: ${result.primarySignal}"
+            }
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.BLACK)
-            setLineSpacing(0f, 1.15f)
+            setLineSpacing(0f, 1.2f)
         }
         signalBox.addView(signalTv)
         containerLayout.addView(signalBox)
@@ -236,15 +243,26 @@ class PredictionPopupView(
             alignmentMode = GridLayout.ALIGN_BOUNDS
         }
 
-        val badgeItems = mutableListOf<String>()
-        if (result.fvgDetected) badgeItems.add("FVG Detected")
-        badgeItems.add(if (result.isUp) "HH-HL Trend" else if (result.isDown) "LH-LL Trend" else "Sideways")
-        badgeItems.add(if (result.candlePatternFound != "None") result.candlePatternFound else "Wick Reject")
-        badgeItems.add("${result.riskLevel} Risk")
+        val badgeItems = if (result.isNoChart) {
+            listOf(
+                "❌ No Candles Found",
+                "📱 Non-Trading Screen",
+                "🎯 Open Quotex / OTC",
+                "🔄 Ready to Re-scan"
+            )
+        } else {
+            val items = mutableListOf<String>()
+            if (result.fvgDetected) items.add("FVG Detected")
+            items.add(if (result.isUp) "HH-HL Trend" else if (result.isDown) "LH-LL Trend" else "Sideways")
+            items.add(if (result.candlePatternFound != "None") result.candlePatternFound else "Wick Reject")
+            items.add("${result.riskLevel} Risk")
+            items
+        }
 
         for (item in badgeItems.take(4)) {
             val badgeView = TextView(context).apply {
-                text = "✅ $item"
+                val prefix = if (item.startsWith("❌") || item.startsWith("📱") || item.startsWith("🎯") || item.startsWith("🔄")) "" else "✅ "
+                text = "$prefix$item"
                 textSize = 10f
                 typeface = Typeface.DEFAULT_BOLD
                 setTextColor(Color.BLACK)
@@ -269,7 +287,15 @@ class PredictionPopupView(
 
         // 5. Action Button: w-full bg-black text-white py-4 rounded-2xl font-black text-sm shadow-xl
         val actionButton = TextView(context).apply {
-            val actionText = if (result.isUp) "ENTER NOW (CALL / UP)" else if (result.isDown) "ENTER NOW (PUT / DOWN)" else "AVOID / WAIT FOR SIGNAL"
+            val actionText = if (result.isNoChart) {
+                "⚠️ OPEN CHART & TRY AGAIN"
+            } else if (result.isUp) {
+                "ENTER NOW (CALL / UP)"
+            } else if (result.isDown) {
+                "ENTER NOW (PUT / DOWN)"
+            } else {
+                "AVOID / WAIT FOR SIGNAL"
+            }
             text = "● $actionText"
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
@@ -285,9 +311,10 @@ class PredictionPopupView(
         }
         containerLayout.addView(actionButton)
 
-        // 5-second countdown timer
+        // Countdown timer (6s for no-chart, 5s for trading signals)
+        val countdownMillis = if (result.isNoChart) 6000L else 5000L
         countdownTimer?.cancel()
-        countdownTimer = object : CountDownTimer(5000, 1000) {
+        countdownTimer = object : CountDownTimer(countdownMillis, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 val sec = (millisUntilFinished / 1000) + 1
                 timerTv.text = " • ${sec}s"

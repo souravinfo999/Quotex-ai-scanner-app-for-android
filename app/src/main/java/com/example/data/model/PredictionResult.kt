@@ -2,7 +2,8 @@ package com.example.data.model
 
 data class PredictionResult(
     val id: Long = 0L,
-    val prediction: String, // "UP", "DOWN", "UNCERTAIN"
+    val prediction: String, // "UP", "DOWN", "UNCERTAIN", "NO_CHART"
+    val isChartDetected: Boolean = true,
     val confidence: Int, // 0 - 100
     val primarySignal: String,
     val confirmations: List<String> = emptyList(),
@@ -18,7 +19,8 @@ data class PredictionResult(
 ) {
     val isUp: Boolean get() = prediction.equals("UP", ignoreCase = true)
     val isDown: Boolean get() = prediction.equals("DOWN", ignoreCase = true)
-    val isUncertain: Boolean get() = !isUp && !isDown
+    val isNoChart: Boolean get() = !isChartDetected || prediction.equals("NO_CHART", ignoreCase = true)
+    val isUncertain: Boolean get() = !isUp && !isDown && !isNoChart
 }
 
 data class ScanSettings(

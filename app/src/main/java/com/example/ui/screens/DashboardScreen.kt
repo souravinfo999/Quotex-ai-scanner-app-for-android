@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,10 +45,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.model.PredictionResult
 import com.example.data.model.ScanSettings
 import com.example.ui.components.PredictionResultCard
@@ -95,21 +98,42 @@ fun DashboardScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "Quotex AI Pro",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryTeal,
-                    letterSpacing = (-0.5).sp
-                )
-                Text(
-                    text = "MISTRAL-LARGE-V3 • ${if (isServiceRunning) "ACTIVE" else "READY"}",
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
-                    color = TextSecondary,
-                    letterSpacing = 1.sp
-                )
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black)
+                        .border(1.5.dp, BullishGreen, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_quotex_logo),
+                        contentDescription = "Quotex AI Pro Logo",
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = "Quotex AI Pro",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryTeal,
+                        letterSpacing = (-0.5).sp
+                    )
+                    Text(
+                        text = "MISTRAL-LARGE-V3 • ${if (isServiceRunning) "ACTIVE" else "READY"}",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        color = TextSecondary,
+                        letterSpacing = 1.sp
+                    )
+                }
             }
 
             // Quick Settings Action

@@ -66,6 +66,11 @@ fun PredictionResultCard(
     var expanded by remember { mutableStateOf(false) }
 
     val (badgeColor, titleText, gradientBg) = when {
+        result.isNoChart -> Triple(
+            UncertainYellow,
+            "📊 NO CHART FOUND",
+            Brush.verticalGradient(listOf(Color(0xFFFF8F00).copy(alpha = 0.15f), SurfaceCard))
+        )
         result.isUp -> Triple(
             BullishGreen,
             "📈 NEXT: UP",

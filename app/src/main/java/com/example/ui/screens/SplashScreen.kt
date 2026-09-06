@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -42,7 +43,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import com.example.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -89,24 +92,19 @@ fun SplashScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Professional Polish Squircle Icon (Gradient from Purple to Teal with crisp border)
+            // Round Quotex AI Pro Logo Hero Icon
             Box(
                 modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(AccentPurple, PrimaryTeal)
-                        )
-                    )
-                    .border(1.5.dp, Color(0x4DFFFFFF), RoundedCornerShape(24.dp)),
+                    .size(92.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black)
+                    .border(2.dp, BullishGreen, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.AutoGraph,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(42.dp)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_quotex_logo),
+                    contentDescription = "Quotex AI Pro Logo",
+                    modifier = Modifier.fillMaxSize()
                 )
             }
 
