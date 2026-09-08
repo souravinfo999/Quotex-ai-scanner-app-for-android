@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -245,10 +247,12 @@ fun PredictionResultCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Mini badges row
-            Row(
+            // Mini badges row (wrapping FlowRow so badges never get squished vertically)
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (result.hasOtcTrap) {
                     MiniBadge(text = "⚡ OTC Trap")
@@ -406,7 +410,9 @@ private fun MiniBadge(text: String) {
             text = text,
             fontSize = 10.sp,
             fontWeight = FontWeight.Medium,
-            color = TextSecondary
+            color = TextSecondary,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
