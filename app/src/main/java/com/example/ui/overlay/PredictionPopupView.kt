@@ -233,6 +233,35 @@ class PredictionPopupView(
             setLineSpacing(0f, 1.2f)
         }
         signalBox.addView(signalTv)
+
+        if (result.hasOtcTrap) {
+            val otcBox = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                val p = dpToPx(6)
+                setPadding(p, p, p, p)
+                val marginLp = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = dpToPx(6)
+                }
+                layoutParams = marginLp
+                background = GradientDrawable().apply {
+                    cornerRadius = dpToPx(6).toFloat()
+                    setColor(Color.parseColor("#22000000"))
+                    setStroke(dpToPx(1), Color.parseColor("#33000000"))
+                }
+            }
+            val otcTv = TextView(context).apply {
+                text = "⚡ OTC PATTERN: ${result.otcPatternTrap}"
+                textSize = 11f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.BLACK)
+            }
+            otcBox.addView(otcTv)
+            signalBox.addView(otcBox)
+        }
+
         containerLayout.addView(signalBox)
 
         addSpace(10)
@@ -252,6 +281,7 @@ class PredictionPopupView(
             )
         } else {
             val items = mutableListOf<String>()
+            if (result.hasOtcTrap) items.add("⚡ " + result.otcPatternTrap.take(20))
             if (result.hasOrderBlock) items.add(if (result.orderBlockZone.contains("Bullish")) "Bullish OB" else "Bearish OB")
             if (result.fvgDetected) items.add("FVG Imbalance")
             if (result.hasLiquiditySweep) items.add(if (result.liquiditySweep.contains("SSL")) "SSL Sweep" else "BSL Sweep")

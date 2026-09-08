@@ -224,6 +224,25 @@ fun PredictionResultCard(
                 )
             }
 
+            if (result.hasOtcTrap) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(BullishGreen.copy(alpha = 0.12f))
+                        .border(1.dp, BullishGreen.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "⚡ OTC STRATEGY: ${result.otcPatternTrap}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BullishGreen
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             // Mini badges row
@@ -231,6 +250,9 @@ fun PredictionResultCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                if (result.hasOtcTrap) {
+                    MiniBadge(text = "⚡ OTC Trap")
+                }
                 if (result.hasOrderBlock) {
                     MiniBadge(text = if (result.orderBlockZone.contains("Bullish")) "🛡️ Bullish OB" else "🛡️ Bearish OB")
                 }

@@ -81,7 +81,18 @@ class FloatingButtonView(
     init {
         setWillNotDraw(false)
         try {
-            logoBitmap = BitmapFactory.decodeResource(resources, R.drawable.ic_quotex_logo)
+            val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_app_logo)
+            drawable?.let { d ->
+                val w = if (d.intrinsicWidth > 0) d.intrinsicWidth else 120
+                val h = if (d.intrinsicHeight > 0) d.intrinsicHeight else 120
+                val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                val c = Canvas(bitmap)
+                d.setBounds(0, 0, w, h)
+                d.draw(c)
+                logoBitmap = bitmap
+            } ?: run {
+                logoBitmap = BitmapFactory.decodeResource(resources, R.drawable.ic_quotex_logo)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }

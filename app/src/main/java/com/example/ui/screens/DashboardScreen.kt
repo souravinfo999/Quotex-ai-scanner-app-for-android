@@ -110,7 +110,7 @@ fun DashboardScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_quotex_logo),
+                        painter = painterResource(id = R.drawable.ic_app_logo),
                         contentDescription = "Quotex AI Pro Logo",
                         modifier = Modifier.fillMaxSize()
                     )

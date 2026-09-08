@@ -1,0 +1,129 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Hexagonal Tech Shield Outer Glow -->
+    <path
+        android:fillColor="#0D00E676"
+        android:pathData="M54,12 L88,28 L88,68 L54,92 L20,68 L20,28 Z" />
+
+    <!-- Outer Hexagonal Border with Gradient -->
+    <path
+        android:strokeWidth="2.5"
+        android:strokeLineJoin="round"
+        android:pathData="M54,14 L86,29 L86,67 L54,89 L22,67 L22,29 Z">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="22"
+                android:startY="14"
+                android:endX="86"
+                android:endY="89"
+                android:type="linear">
+                <item android:color="#00E5FF" android:offset="0.0" />
+                <item android:color="#00E676" android:offset="0.5" />
+                <item android:color="#FFD600" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Inner Tech Shield Container -->
+    <path
+        android:fillColor="#121824"
+        android:strokeWidth="1.2"
+        android:strokeColor="#253245"
+        android:pathData="M54,19 L81,32 L81,64 L54,84 L27,64 L27,32 Z" />
+
+    <!-- Grid / Chart Horizon Lines -->
+    <path
+        android:strokeWidth="0.8"
+        android:strokeColor="#1C283A"
+        android:pathData="M30,42 L78,42 M30,54 L78,54 M30,66 L78,66" />
+
+    <!-- Candlestick 1: Pullback / Red-Orange Candle (Left) -->
+    <!-- Wick -->
+    <path
+        android:strokeWidth="1.2"
+        android:strokeColor="#FF5252"
+        android:pathData="M37,46 L37,68" />
+    <!-- Body -->
+    <path
+        android:fillColor="#FF5252"
+        android:pathData="M35,50 L39,50 L39,63 L35,63 Z" />
+
+    <!-- Candlestick 2: Reversal Support Candle (Center-Left) -->
+    <!-- Wick -->
+    <path
+        android:strokeWidth="1.2"
+        android:strokeColor="#00E5FF"
+        android:pathData="M48,38 L48,70" />
+    <!-- Body -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M46,45 L50,45 L50,60 L46,60 Z" />
+
+    <!-- Candlestick 3: Strong Bullish Breakout Candle (Center-Right) -->
+    <!-- Wick -->
+    <path
+        android:strokeWidth="1.4"
+        android:strokeColor="#00E676"
+        android:pathData="M59,28 L59,62" />
+    <!-- Body -->
+    <path
+        android:fillColor="#00E676"
+        android:pathData="M57,33 L61,33 L61,53 L57,53 Z" />
+
+    <!-- Candlestick 4: High-Momentum Extension Candle (Right) -->
+    <!-- Wick -->
+    <path
+        android:strokeWidth="1.4"
+        android:strokeColor="#00E676"
+        android:pathData="M70,22 L70,52" />
+    <!-- Body -->
+    <path
+        android:fillColor="#00E676"
+        android:pathData="M68,26 L72,26 L72,44 L68,44 Z" />
+
+    <!-- Ascending Dynamic AI Surge Curve (Neon Wave) -->
+    <path
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M32,66 Q45,63 52,50 T73,23">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="32"
+                android:startY="66"
+                android:endX="73"
+                android:endY="23"
+                android:type="linear">
+                <item android:color="#00E5FF" android:offset="0.0" />
+                <item android:color="#00E676" android:offset="0.65" />
+                <item android:color="#FFEA00" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Upward Breakout Arrowhead -->
+    <path
+        android:fillColor="#FFEA00"
+        android:pathData="M73,20 L76,28 L68,25 Z" />
+
+    <!-- AI Neural Node 1 (Pulse on Arrowhead) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M73,20 A1.5,1.5 0 1,1 73,23 A1.5,1.5 0 1,1 73,20" />
+
+    <!-- AI Neural Node 2 (Signal Origin) -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M32,66 A1.5,1.5 0 1,1 32,69 A1.5,1.5 0 1,1 32,66" />
+
+    <!-- AI Neural Node 3 (Breakout Pivot) -->
+    <path
+        android:fillColor="#00E676"
+        android:pathData="M52,50 A1.8,1.8 0 1,1 52,53.6 A1.8,1.8 0 1,1 52,50" />
+
+</vector>

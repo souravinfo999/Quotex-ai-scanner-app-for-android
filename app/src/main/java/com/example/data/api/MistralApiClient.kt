@@ -163,7 +163,7 @@ class MistralApiClient {
         }
     }
 
-    private fun parsePredictionResponse(responseBody: String, threshold: Int): PredictionResult {
+    internal fun parsePredictionResponse(responseBody: String, threshold: Int): PredictionResult {
         val root = JSONObject(responseBody)
         val choices = root.getJSONArray("choices")
         if (choices.length() == 0) {
@@ -290,6 +290,10 @@ class MistralApiClient {
             else -> "None"
         }
 
+        // Quotex OTC Trap & Strategy Pattern:
+        val rawOtcStrategy = json.optString("otc_strategy", "None").trim()
+        val otcPatternTrap = if (rawOtcStrategy.isBlank() || rawOtcStrategy.equals("NONE", ignoreCase = true)) "None" else rawOtcStrategy
+
         // Accurate Trend Extraction:
         val marketStructure = observations?.optString("market_structure", "")?.uppercase() ?: ""
         var trend = json.optString("trend", "").trim()
@@ -350,6 +354,7 @@ class MistralApiClient {
             fvgDetected = fvgDetected,
             orderBlockZone = orderBlockZone,
             liquiditySweep = liquiditySweep,
+            otcPatternTrap = otcPatternTrap,
             trend = trend,
             riskLevel = riskLevel,
             advice = finalAdvice,
@@ -389,6 +394,7 @@ Return IMMEDIATELY:
   "fvg_type": "NONE",
   "order_block": "NONE",
   "liquidity_sweep": "NONE",
+  "otc_strategy": "NONE",
   "candle_pattern_found": "None",
   "trend": "None",
   "primary_signal": "No financial trading chart found on this screen.",
@@ -431,15 +437,45 @@ STEP 2: SMC & PRICE ACTION OBSERVATIONS:
    - SSL Swept: Price pierced below swing low, grabbed stops, and snapped up with long lower wick.
    - BSL Swept: Price spiked above swing high, grabbed stops, and dropped with long upper wick.
 
-STEP 3: PRO-TREND TRADING DECISIONS:
+STEP 3: QUOTEX OTC ALGORITHMIC TRAP & STRATEGY ENGINE:
+Quotex OTC markets run on algorithmic pricing that frequently exploits retail trader psychological biases. Evaluate and identify if any of these 5 high-win-rate OTC patterns are present:
+1. OTC EXHAUSTION CANDLE TRAP:
+   - Abnormally giant momentum candle (2x-3x normal size) pushing into resistance or round number with little/no wick.
+   - Retail traders mistakenly jump into continuation; the OTC algorithm exhausts buyers/sellers and reverses sharply on the very next candle.
+   - If Giant Green Exhaustion -> Forecast "DOWN" (PUT).
+   - If Giant Red Exhaustion -> Forecast "UP" (CALL).
+   - Set otc_strategy: "OTC Exhaustion Candle Trap".
+2. OTC FAKEOUT / WICK SWEEP TRAP:
+   - Candle spikes past support or resistance to trigger retail breakout orders, but closes back inside the zone leaving a massive rejection wick (>40% of total candle length).
+   - Resistance Fakeout with large upper wick -> Forecast "DOWN" (PUT).
+   - Support Fakeout with large lower wick -> Forecast "UP" (CALL).
+   - Set otc_strategy: "OTC Fakeout Wick Sweep Trap".
+3. OTC TREND MICRO-CYCLE (2-1-2 PULLBACK CONTINUATION):
+   - In an established trend (2-3 solid trending candles), exactly 1 small weak pullback candle forms with rejection wick opposing the trend.
+   - In Downtrend: 1 weak green pullback candle with upper wick -> Forecast immediate "DOWN" (PUT) continuation.
+   - In Uptrend: 1 weak red pullback candle with lower wick -> Forecast immediate "UP" (CALL) continuation.
+   - Set otc_strategy: "OTC 2-1-2 Trend Pullback Continuation".
+4. ROUND NUMBER LEVEL REJECTION:
+   - Price touches a psychological round number (.000, .500, .100, .800) and displays a clean, decisive wick rejection.
+   - Rejection at Round Number Resistance -> Forecast "DOWN" (PUT).
+   - Rejection at Round Number Support -> Forecast "UP" (CALL).
+   - Set otc_strategy: "OTC Round Number Level Rejection".
+5. OTC DOJI TREND CONTINUATION (ALGORITHMIC REST):
+   - In strong sustained trend momentum, a Doji candle forms mid-run. In OTC algorithms, this is NOT an indecision reversal; it is a brief algorithmic rest before continuing the heavy trend!
+   - Strong Downtrend + Doji -> Forecast "DOWN" (PUT) continuation.
+   - Strong Uptrend + Doji -> Forecast "UP" (CALL) continuation.
+   - Set otc_strategy: "OTC Doji Trend Continuation".
+
+STEP 4: PRO-TREND TRADING DECISIONS:
 
 A. FORECAST "DOWN" (Put / Red candle expected) WHEN:
 - Market is in a DOWNTREND (Bearish LH-LL) and:
   * Red momentum continuation breaking below recent candle low.
   * Price pulled back up to resistance or Bearish Order Block/FVG and rejected with upper wick.
   * Bearish Engulfing or Shooting Star pattern.
-- Or Market in Range and cleanly rejected at Resistance ceiling.
--> confidence: 78 to 92
+  * OTC Pattern: Bearish 2-1-2 Pullback Continuation, or OTC Doji Trend Continuation.
+- Or Market at Resistance with OTC Exhaustion Green Trap or Resistance Fakeout Wick Sweep.
+-> confidence: 78 to 94
 -> advice: "ENTER NOW (PUT / DOWN)"
 
 B. FORECAST "UP" (Call / Green candle expected) WHEN:
@@ -447,14 +483,15 @@ B. FORECAST "UP" (Call / Green candle expected) WHEN:
   * Green momentum continuation breaking above recent candle high.
   * Price pulled back down to support or Bullish Order Block/FVG and bounced with lower wick.
   * Bullish Engulfing or Hammer pattern.
-- Or Market in Range and cleanly bounced at Support floor.
--> confidence: 78 to 92
+  * OTC Pattern: Bullish 2-1-2 Pullback Continuation, or OTC Doji Trend Continuation.
+- Or Market at Support with OTC Exhaustion Red Trap or Support Fakeout Wick Sweep.
+-> confidence: 78 to 94
 -> advice: "ENTER NOW (CALL / UP)"
 
 C. FORECAST "UNCERTAIN" (Wait / Avoid Counter-Trend) WHEN:
-- Market is in a DOWNTREND, but latest candle formed a green bounce or lower wick -> DO NOT CALL UP! Forecast "UNCERTAIN", advice: "WAIT FOR PULLBACK TO RESISTANCE".
-- Market is in an UPTREND, but latest candle formed a red pullback -> DO NOT CALL DOWN! Forecast "UNCERTAIN", advice: "WAIT FOR PULLBACK TO SUPPORT".
-- Candle is a Doji, spinning top, or trapped in tight chop.
+- Market is in a DOWNTREND, but latest candle formed a normal green bounce without complete exhaustion -> DO NOT CALL UP! Forecast "UNCERTAIN", advice: "WAIT FOR PULLBACK TO RESISTANCE".
+- Market is in an UPTREND, but latest candle formed a red pullback without complete exhaustion -> DO NOT CALL DOWN! Forecast "UNCERTAIN", advice: "WAIT FOR PULLBACK TO SUPPORT".
+- Candle is trapped in tight non-directional chop.
 -> confidence: 45 to 65
 -> advice: "WAIT FOR CLEAR SIGNAL"
 -> primary_signal: "Counter-Trend or Choppy Market / Wait for Trend Alignment"
@@ -474,14 +511,15 @@ OUTPUT FORMAT (STRICT JSON ONLY):
   "fvg_type": "BULLISH_FVG" | "BEARISH_FVG" | "NONE",
   "order_block": "BULLISH_ORDER_BLOCK" | "BEARISH_ORDER_BLOCK" | "NONE",
   "liquidity_sweep": "SSL_SWEPT_BULLISH" | "BSL_SWEPT_BEARISH" | "NONE",
+  "otc_strategy": "OTC Exhaustion Candle Trap" | "OTC Fakeout Wick Sweep Trap" | "OTC 2-1-2 Trend Pullback Continuation" | "OTC Round Number Level Rejection" | "OTC Doji Trend Continuation" | "None",
   "candle_pattern_found": "Hammer / Bullish Pin Bar" | "Shooting Star" | "Bullish Engulfing" | "Bearish Engulfing" | "Morning Star" | "Evening Star" | "Doji / Indecision" | "None",
   "sr_zone": "Support / Demand Zone" | "Resistance / Supply Zone" | "Round Number Level" | "None",
   "trend": "Bullish" | "Bearish" | "Sideways",
-  "primary_signal": "Concise trigger summary (e.g. 'Bearish Trend Continuation with Red Momentum' or 'Bearish Rejection at Order Block')",
+  "primary_signal": "Concise trigger summary (e.g. 'Bearish Trend Continuation with Red Momentum' or 'OTC Fakeout Wick Sweep Trap (PUT)')",
   "confirmations": [
     "Observation 1 (macro trend alignment)",
     "Observation 2 (candle color & wick rejection)",
-    "Observation 3 (SMC structure or S/R zone)"
+    "Observation 3 (OTC trap / SMC structure or S/R zone)"
   ],
   "prediction": "UP" | "DOWN" | "UNCERTAIN",
   "confidence": 50-95,
