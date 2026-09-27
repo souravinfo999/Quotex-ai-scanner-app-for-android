@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import com.example.data.api.MistralApiClient
+import com.example.data.engine.QuantSignalEngine
 import com.example.data.local.AppDatabase
 import com.example.data.local.ScanEntity
 import com.example.data.model.PredictionResult
@@ -22,6 +23,8 @@ class ScannerRepository(context: Context) {
     private val db = AppDatabase.getDatabase(appContext)
     private val scanDao = db.scanDao()
     private val apiClient = MistralApiClient()
+
+    private var lastProcessedScan: PredictionResult? = null
 
     val settingsFlow = prefs.settingsFlow
 
@@ -45,6 +48,14 @@ class ScannerRepository(context: Context) {
 
     suspend fun saveScan(result: PredictionResult): Long = withContext(Dispatchers.IO) {
         scanDao.insertScan(ScanEntity.fromPredictionResult(result))
+    }
+
+    suspend fun loadAuditBenchmarkTrades(): Int = withContext(Dispatchers.IO) {
+        val benchmarkScans = QuantSignalEngine.getHistoricalAuditBenchmark()
+        scanDao.clearAll()
+        val entities = benchmarkScans.map { ScanEntity.fromPredictionResult(it) }
+        scanDao.insertScans(entities)
+        benchmarkScans.size
     }
 
     suspend fun updateOutcome(scanId: Long, outcome: String) = withContext(Dispatchers.IO) {
@@ -71,8 +82,26 @@ class ScannerRepository(context: Context) {
         val apiResult = apiClient.analyzeChart(base64, settings)
         if (apiResult.isSuccess) {
             val result = apiResult.getOrThrow()
+
+            // Duplicate filter check (User requirement 17)
+            if (!result.isNoChart && QuantSignalEngine.isDuplicateSignal(
+                    lastScan = lastProcessedScan,
+                    direction = result.prediction,
+                    structure = result.marketStructure,
+                    timestamp = result.timestamp
+                )
+            ) {
+                // Return current active setup without spamming duplicate database records
+                return@withContext Result.success(
+                    result.copy(
+                        advice = "SETUP ACTIVE: ${result.advice} (Waiting for next 1M candle open)"
+                    )
+                )
+            }
+
             // Save to database only if a genuine chart was detected
             if (!result.isNoChart) {
+                lastProcessedScan = result
                 saveScan(result)
             }
             Result.success(result)
@@ -85,47 +114,100 @@ class ScannerRepository(context: Context) {
      * Fallback/Test scan for local demonstration or offline testing
      */
     suspend fun runSampleAnalysis(isBullish: Boolean): PredictionResult = withContext(Dispatchers.Default) {
+        val quantEval = if (isBullish) {
+            QuantSignalEngine.evaluate(
+                directionBias = "UP",
+                marketStructure = "BULLISH_HH_HL",
+                trend = "Bullish",
+                srZone = "Key Support (1.08200)",
+                liquiditySweep = "SSL Swept",
+                fvgDetected = true,
+                fvgFresh = true,
+                orderBlockZone = "Bullish Order Block (Demand)",
+                obFresh = true,
+                candlePattern = "Bullish Engulfing",
+                isDisplacementCandle = true,
+                momentumStrong = true,
+                otcPatternTrap = "None"
+            )
+        } else {
+            QuantSignalEngine.evaluate(
+                directionBias = "DOWN",
+                marketStructure = "BEARISH_LH_LL",
+                trend = "Bearish",
+                srZone = "Major Resistance (1.08700)",
+                liquiditySweep = "BSL Swept",
+                fvgDetected = true,
+                fvgFresh = true,
+                orderBlockZone = "Bearish Order Block (Supply)",
+                obFresh = true,
+                candlePattern = "Shooting Star / Pin Bar",
+                isDisplacementCandle = true,
+                momentumStrong = true,
+                otcPatternTrap = "OTC Fakeout Trap"
+            )
+        }
+
         val result = if (isBullish) {
             PredictionResult(
                 prediction = "UP",
-                confidence = 88,
-                primarySignal = "Bullish Engulfing with Fair Value Gap (FVG) Fill",
+                confidence = quantEval.signalScore,
+                signalScore = quantEval.signalScore,
+                setupGrade = quantEval.setupGrade,
+                setupRecommendation = quantEval.recommendation,
+                primarySignal = "Bullish Order Block Mitigation + Sell-Side Liquidity Sweep",
                 confirmations = listOf(
-                    "Strong lower wick rejection at key Support zone",
-                    "Bullish Fair Value Gap (FVG) filled and rejected upward",
-                    "Uptrend intact (Consistent Higher Highs & Higher Lows)",
-                    "Order Block reaction with momentum expansion"
+                    "Sell-Side Liquidity (SSL) swept below previous swing low",
+                    "Price mitigated fresh Bullish Order Block at Support",
+                    "Bullish market structure intact (Higher Highs & Higher Lows)",
+                    "Bullish Engulfing displacement candle confirmed"
                 ),
                 candlePatternFound = "Bullish Engulfing",
-                srZone = "Key Horizontal Support (0.68500)",
+                srZone = "Key Support (1.08200)",
                 fvgDetected = true,
+                orderBlockZone = "Bullish Order Block (Demand)",
+                liquiditySweep = "SSL Swept",
+                otcPatternTrap = "None",
+                marketStructure = "BULLISH_HH_HL",
                 trend = "Bullish",
                 riskLevel = "LOW",
-                advice = "ENTER NOW (Call / Up)",
+                advice = "ENTER NOW (CALL / UP)",
                 timestamp = System.currentTimeMillis(),
-                isSample = true
+                isSample = true,
+                reasons = quantEval.reasons,
+                warnings = quantEval.warnings
             )
         } else {
             PredictionResult(
                 prediction = "DOWN",
-                confidence = 84,
-                primarySignal = "Shooting Star Rejection at Round Number Resistance",
+                confidence = quantEval.signalScore,
+                signalScore = quantEval.signalScore,
+                setupGrade = quantEval.setupGrade,
+                setupRecommendation = quantEval.recommendation,
+                primarySignal = "Bearish Supply Rejection + Buy-Side Liquidity Grab",
                 confirmations = listOf(
-                    "Prominent upper wick indicating strong seller rejection",
-                    "Fakeout liquidity sweep above resistance level",
-                    "Bearish Change of Character (CHoCH) structure shift",
-                    "Momentum breakdown following consolidation"
+                    "Buy-Side Liquidity (BSL) swept above session resistance",
+                    "Bearish Order Block defended with upper wick rejection",
+                    "Bearish Change of Character (CHoCH) displacement",
+                    "OTC liquidity trap confirmed against retail breakout"
                 ),
                 candlePatternFound = "Shooting Star / Pin Bar",
-                srZone = "Major Resistance (1.09000)",
+                srZone = "Major Resistance (1.08700)",
                 fvgDetected = true,
+                orderBlockZone = "Bearish Order Block (Supply)",
+                liquiditySweep = "BSL Swept",
+                otcPatternTrap = "OTC Fakeout Trap",
+                marketStructure = "BEARISH_LH_LL",
                 trend = "Bearish",
                 riskLevel = "LOW",
-                advice = "ENTER NOW (Put / Down)",
+                advice = "ENTER NOW (PUT / DOWN)",
                 timestamp = System.currentTimeMillis(),
-                isSample = true
+                isSample = true,
+                reasons = quantEval.reasons,
+                warnings = quantEval.warnings
             )
         }
+        lastProcessedScan = result
         saveScan(result)
         result
     }

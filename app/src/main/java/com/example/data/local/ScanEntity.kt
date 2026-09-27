@@ -22,7 +22,15 @@ data class ScanEntity(
     val trend: String,
     val riskLevel: String,
     val advice: String,
-    val userOutcome: String? = null // "WIN", "LOSS", null
+    val userOutcome: String? = null, // "WIN", "LOSS", null
+    val signalScore: Int = confidence,
+    val setupGrade: String = "B",
+    val setupRecommendation: String = "VALID SETUP",
+    val marketStructure: String = "None",
+    val liquidityStatus: String = "None",
+    val reasonsJoined: String = "",
+    val warningsJoined: String = "",
+    val failureReason: String? = null
 ) {
     fun toPredictionResult(): PredictionResult {
         return PredictionResult(
@@ -41,7 +49,15 @@ data class ScanEntity(
             riskLevel = riskLevel,
             advice = advice,
             timestamp = timestamp,
-            userOutcome = userOutcome
+            userOutcome = userOutcome,
+            signalScore = if (signalScore > 0) signalScore else confidence,
+            setupGrade = setupGrade,
+            setupRecommendation = setupRecommendation,
+            marketStructure = marketStructure,
+            liquidityStatus = liquidityStatus,
+            reasons = if (reasonsJoined.isBlank()) emptyList() else reasonsJoined.split("|||"),
+            warnings = if (warningsJoined.isBlank()) emptyList() else warningsJoined.split("|||"),
+            failureReason = failureReason
         )
     }
 
@@ -63,7 +79,15 @@ data class ScanEntity(
                 trend = p.trend,
                 riskLevel = p.riskLevel,
                 advice = p.advice,
-                userOutcome = p.userOutcome
+                userOutcome = p.userOutcome,
+                signalScore = p.signalScore,
+                setupGrade = p.setupGrade,
+                setupRecommendation = p.setupRecommendation,
+                marketStructure = p.marketStructure,
+                liquidityStatus = p.liquidityStatus,
+                reasonsJoined = p.reasons.joinToString("|||"),
+                warningsJoined = p.warnings.joinToString("|||"),
+                failureReason = p.failureReason
             )
         }
     }

@@ -29,7 +29,7 @@ object TradeExportHelper {
     }
 
     /**
-     * Generates standard RFC 4180 CSV string representing all trades.
+     * Generates standard RFC 4180 CSV string representing all trades with full quant attributes.
      */
     fun generateCsv(scans: List<PredictionResult>): String {
         val sb = StringBuilder()
@@ -40,9 +40,12 @@ object TradeExportHelper {
             "Timestamp_Millis",
             "Date_Time",
             "Signal",
-            "Confidence_Percent",
+            "Signal_Score",
+            "Setup_Grade",
+            "Setup_Recommendation",
             "Outcome",
             "Market_Trend",
+            "Market_Structure",
             "Risk_Level",
             "System_Advice",
             "Primary_Signal_Reason",
@@ -52,6 +55,7 @@ object TradeExportHelper {
             "Order_Block_Zone",
             "Liquidity_Sweep",
             "OTC_Trap",
+            "Failure_Reason",
             "Confirmations",
             "Chart_Detected"
         )
@@ -72,9 +76,12 @@ object TradeExportHelper {
                 scan.timestamp.toString(),
                 formattedDate,
                 scan.prediction.uppercase(Locale.US),
-                "${scan.confidence}%",
+                "${scan.effectiveScore}/100",
+                scan.setupGrade,
+                scan.setupRecommendation,
                 outcomeStr,
                 scan.trend,
+                scan.marketStructure,
                 scan.riskLevel,
                 scan.advice,
                 scan.primarySignal,
@@ -84,6 +91,7 @@ object TradeExportHelper {
                 scan.orderBlockZone,
                 scan.liquiditySweep,
                 scan.otcPatternTrap,
+                scan.failureReason ?: "None",
                 confirmationsStr,
                 if (scan.isChartDetected) "YES" else "NO"
             )
@@ -91,6 +99,102 @@ object TradeExportHelper {
         }
 
         return sb.toString()
+    }
+
+    /**
+     * Parses an RFC 4180 CSV string back into PredictionResults for backtesting/auditing.
+     */
+    fun parseCsvToScans(csvText: String): List<PredictionResult> {
+        val lines = csvText.lines().filter { it.isNotBlank() }
+        if (lines.size <= 1) return emptyList()
+
+        val results = mutableListOf<PredictionResult>()
+        // Skip header line
+        for (i in 1 until lines.size) {
+            val line = lines[i]
+            val cols = parseCsvLine(line)
+            if (cols.size >= 5) {
+                try {
+                    val id = cols.getOrNull(0)?.toLongOrNull() ?: i.toLong()
+                    val ts = cols.getOrNull(1)?.toLongOrNull() ?: System.currentTimeMillis()
+                    val signal = cols.getOrNull(3)?.trim()?.uppercase(Locale.US) ?: "UNCERTAIN"
+                    val scoreRaw = cols.getOrNull(4)?.replace("%", "")?.replace("/100", "")?.trim()?.toIntOrNull() ?: 70
+                    val grade = cols.getOrNull(5)?.trim() ?: (if (scoreRaw >= 80) "A" else "B")
+                    val recommendation = cols.getOrNull(6)?.trim() ?: "VALID SETUP"
+                    val outcomeRaw = cols.getOrNull(7)?.trim()
+                    val outcome = if (outcomeRaw == "WIN" || outcomeRaw == "LOSS") outcomeRaw else null
+                    val trend = cols.getOrNull(8)?.trim() ?: "Sideways"
+                    val structure = cols.getOrNull(9)?.trim() ?: "None"
+                    val risk = cols.getOrNull(10)?.trim() ?: "LOW"
+                    val advice = cols.getOrNull(11)?.trim() ?: "ENTER NOW"
+                    val primary = cols.getOrNull(12)?.trim() ?: "SMC Price Action Confluence"
+                    val pattern = cols.getOrNull(13)?.trim() ?: "None"
+                    val sr = cols.getOrNull(14)?.trim() ?: "None"
+                    val fvg = cols.getOrNull(15)?.equals("YES", ignoreCase = true) ?: false
+                    val ob = cols.getOrNull(16)?.trim() ?: "None"
+                    val sweep = cols.getOrNull(17)?.trim() ?: "None"
+                    val otc = cols.getOrNull(18)?.trim() ?: "None"
+                    val failure = cols.getOrNull(19)?.trim()?.let { if (it == "None") null else it }
+                    val confs = cols.getOrNull(20)?.split(";")?.map { it.trim() } ?: emptyList()
+
+                    results.add(
+                        PredictionResult(
+                            id = id,
+                            prediction = signal,
+                            confidence = scoreRaw,
+                            primarySignal = primary,
+                            confirmations = confs,
+                            candlePatternFound = pattern,
+                            srZone = sr,
+                            fvgDetected = fvg,
+                            orderBlockZone = ob,
+                            liquiditySweep = sweep,
+                            otcPatternTrap = otc,
+                            trend = trend,
+                            riskLevel = risk,
+                            advice = advice,
+                            timestamp = ts,
+                            userOutcome = outcome,
+                            signalScore = scoreRaw,
+                            setupGrade = grade,
+                            setupRecommendation = recommendation,
+                            marketStructure = structure,
+                            liquidityStatus = sweep,
+                            failureReason = failure
+                        )
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+        return results
+    }
+
+    private fun parseCsvLine(line: String): List<String> {
+        val result = mutableListOf<String>()
+        var curVal = StringBuilder()
+        var inQuotes = false
+        var i = 0
+        while (i < line.length) {
+            val c = line[i]
+            if (c == '\"') {
+                if (inQuotes && i + 1 < line.length && line[i + 1] == '\"') {
+                    curVal.append('\"')
+                    i++
+                } else {
+                    inQuotes = !inQuotes
+                }
+            } else if (c == ',' && !inQuotes) {
+                result.add(curVal.toString().trim())
+                curVal = StringBuilder()
+            } else {
+                curVal.append(c)
+            }
+            i++
+        }
+        result.add(curVal.toString().trim())
+        return result
     }
 
     /**

@@ -83,12 +83,33 @@ fun PredictionResultCard(
             Brush.verticalGradient(listOf(Color(0x33FFB800), SurfaceCard)),
             Color(0x4DFFB800)
         )
+        result.isNoTrade -> CardThemeData(
+            UncertainYellow,
+            "NO TRADE / WAIT",
+            "INSUFFICIENT CONFLUENCE • WAIT",
+            Brush.verticalGradient(listOf(Color(0x29FFC01E), SurfaceCard)),
+            Color(0x4DFFC01E)
+        )
+        result.isStrongUp -> CardThemeData(
+            BullishGreen,
+            "NEXT CANDLE: STRONG CALL (UP)",
+            "HIGH CONFLUENCE • 1-MIN CALL",
+            Brush.verticalGradient(listOf(Color(0x3800F576), SurfaceCard)),
+            BullishGreen
+        )
         result.isUp -> CardThemeData(
             BullishGreen,
             "NEXT CANDLE: CALL (UP)",
             "BUY 1-MIN CALL",
             Brush.verticalGradient(listOf(Color(0x2E00F576), SurfaceCard)),
             Color(0x5900F576)
+        )
+        result.isStrongDown -> CardThemeData(
+            BearishRed,
+            "NEXT CANDLE: STRONG PUT (DOWN)",
+            "HIGH CONFLUENCE • 1-MIN PUT",
+            Brush.verticalGradient(listOf(Color(0x38FF3838), SurfaceCard)),
+            BearishRed
         )
         result.isDown -> CardThemeData(
             BearishRed,
@@ -99,8 +120,8 @@ fun PredictionResultCard(
         )
         else -> CardThemeData(
             UncertainYellow,
-            "NEXT: UNCERTAIN",
-            "WAIT FOR HIGH CONFLUENCE",
+            "NO TRADE / WAIT",
+            "WAIT FOR EDGE FORMATION",
             Brush.verticalGradient(listOf(Color(0x29FFC01E), SurfaceCard)),
             Color(0x4DFFC01E)
         )
@@ -136,7 +157,7 @@ fun PredictionResultCard(
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = "AI SIGNAL",
+                            text = if (result.isNoTrade) "WAIT EDGE" else "QUANT SIGNAL",
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 0.8.sp,
@@ -176,16 +197,16 @@ fun PredictionResultCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Large Directional Action Hero Banner
+            // Large Directional Action Hero Banner & Score Pill
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = titleText,
-                        fontSize = 18.sp,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace,
                         letterSpacing = (-0.3).sp,
@@ -201,38 +222,50 @@ fun PredictionResultCard(
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .border(1.dp, badgeColor.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "${result.confidence}%",
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 15.sp,
-                            color = badgeColor
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "ACC",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextSecondary
-                        )
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Score + Grade Badge (Score out of 100, not probability)
+                Column(horizontalAlignment = Alignment.End) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.Black.copy(alpha = 0.65f))
+                            .border(1.dp, badgeColor.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${result.effectiveScore}/100",
+                                fontWeight = FontWeight.Black,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 14.sp,
+                                color = badgeColor
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "GRADE ${result.setupGrade}",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                color = TextPrimary
+                            )
+                        }
                     }
+                    Text(
+                        text = result.setupRecommendation,
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(top = 2.dp, end = 2.dp)
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Accuracy Confidence Progress Bar
+            // Setup Confluence Progress Bar
             LinearProgressIndicator(
-                progress = { (result.confidence / 100f).coerceIn(0f, 1f) },
+                progress = { (result.effectiveScore / 100f).coerceIn(0f, 1f) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
@@ -243,7 +276,7 @@ fun PredictionResultCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Primary Signal Card
+            // Primary Signal Trigger Box
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -278,6 +311,105 @@ fun PredictionResultCard(
                         color = TextPrimary,
                         lineHeight = 18.sp
                     )
+                }
+            }
+
+            // Confluences & Reasons Block (Requirement 15 & 24)
+            if (result.reasons.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.Black.copy(alpha = 0.25f))
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "CONFLUENCES (REASONS):",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace,
+                        color = PrimaryTeal,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    result.reasons.take(4).forEach { reason ->
+                        val cleanText = if (reason.startsWith("✓")) reason else "✓ $reason"
+                        Text(
+                            text = cleanText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = BullishGreenDark.copy(alpha = 0.95f),
+                            modifier = Modifier.padding(vertical = 1.dp)
+                        )
+                    }
+                }
+            }
+
+            // Warnings Block (Requirement 15 & 24)
+            if (result.warnings.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0x24FFB300))
+                        .border(1.dp, Color(0x4DFFB300), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    result.warnings.forEach { warning ->
+                        val cleanText = if (warning.startsWith("⚠")) warning else "⚠ $warning"
+                        Text(
+                            text = cleanText,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFFFD54F),
+                            modifier = Modifier.padding(vertical = 1.dp)
+                        )
+                    }
+                }
+            }
+
+            // Loss Root Cause Analysis Section (Requirement 22)
+            if (result.userOutcome == "LOSS") {
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(BearishRed.copy(alpha = 0.12f))
+                        .border(1.dp, BearishRed.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .padding(10.dp)
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "🔍 WHY DID THIS SIGNAL FAIL?",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = FontFamily.Monospace,
+                                color = BearishRed,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
+                        val diagText = result.failureReason ?: com.example.data.engine.QuantSignalEngine.diagnoseFailure(
+                            prediction = result.prediction,
+                            trend = result.trend,
+                            liquiditySweep = result.liquiditySweep,
+                            srZone = result.srZone,
+                            fvgDetected = result.fvgDetected,
+                            orderBlockZone = result.orderBlockZone,
+                            candlePattern = result.candlePatternFound,
+                            score = result.effectiveScore
+                        )
+                        Text(
+                            text = diagText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary.copy(alpha = 0.9f)
+                        )
+                    }
                 }
             }
 
@@ -325,6 +457,10 @@ fun PredictionResultCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                MiniBadge(text = "Grade: ${result.setupGrade}")
+                if (result.marketStructure != "None" && result.marketStructure.isNotBlank()) {
+                    MiniBadge(text = "Structure: ${result.marketStructure}")
+                }
                 if (result.hasOtcTrap) {
                     MiniBadge(text = "⚡ OTC Trap")
                 }

@@ -261,7 +261,7 @@ fun SettingsScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "CONFIDENCE & SCAN TIMING",
+                    text = "SETUP QUALITY SCORE & TIMING",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextSecondary,
@@ -275,16 +275,16 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Threshold Filter", fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text("Setup Score Threshold", fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
                     Text(
-                        "${confidenceThreshold.toInt()}% min",
+                        "${confidenceThreshold.toInt()}/100 min",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryTeal
                     )
                 }
                 Text(
-                    text = "Signals under this threshold are rejected as 'UNCERTAIN' to safeguard trading funds.",
+                    text = "Signals under this confluence score are filtered as 'WAIT / NO TRADE' to enforce trading discipline.",
                     fontSize = 11.sp,
                     color = TextSecondary,
                     modifier = Modifier.padding(bottom = 6.dp)

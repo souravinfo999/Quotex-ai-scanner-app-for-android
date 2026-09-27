@@ -1,5 +1,6 @@
 package com.example.data.api
 
+import com.example.data.engine.QuantSignalEngine
 import com.example.data.model.PredictionResult
 import com.example.data.model.ScanSettings
 import kotlinx.coroutines.Dispatchers
@@ -311,27 +312,59 @@ class MistralApiClient {
         val isUptrend = trend.equals("Bullish", ignoreCase = true) ||
                 marketStructure.contains("BULLISH") || marketStructure.contains("HH_HL")
 
-        // --- MULTI-FACTOR COMBINATION ENGINE ---
-        // Balanced evaluation: If the AI identifies high-confluence Bullish triggers (Support bounce,
-        // Bullish Order Block, SSL Sweep, OTC Red Exhaustion, or Uptrend Continuation), forecast UP.
-        // If Bearish triggers (Resistance rejection, Bearish Order Block, BSL Sweep, OTC Green Exhaustion,
-        // or Downtrend Continuation), forecast DOWN.
-        val finalPrediction = prediction
-        val finalConfidence = confidence
-        val finalPrimarySignal = primarySignal
-        val finalAdvice = advice
+        // --- QUANTITATIVE SIGNAL ENGINE & CONTRADICTION VALIDATION ---
+        val quantEval = if (prediction != "NO_CHART") {
+            QuantSignalEngine.evaluate(
+                directionBias = prediction,
+                marketStructure = if (marketStructure.isNotBlank()) marketStructure else if (isUptrend) "BULLISH_HH_HL" else if (isDowntrend) "BEARISH_LH_LL" else "RANGING",
+                trend = trend,
+                srZone = srZone,
+                liquiditySweep = liquiditySweep,
+                fvgDetected = fvgDetected,
+                fvgFresh = true,
+                orderBlockZone = orderBlockZone,
+                obFresh = true,
+                candlePattern = candlePattern,
+                isDisplacementCandle = wickRejection.isNotBlank() || candlePattern.contains("Engulf", ignoreCase = true) || candlePattern.contains("Marubozu", ignoreCase = true),
+                momentumStrong = true,
+                otcPatternTrap = otcPatternTrap
+            )
+        } else {
+            null
+        }
+
+        val finalPrediction = when {
+            prediction == "NO_CHART" -> "NO_CHART"
+            quantEval?.decision == QuantSignalEngine.SignalDecision.WAIT_NO_TRADE -> "UNCERTAIN"
+            quantEval?.decision == QuantSignalEngine.SignalDecision.STRONG_CALL || quantEval?.decision == QuantSignalEngine.SignalDecision.CALL -> "UP"
+            quantEval?.decision == QuantSignalEngine.SignalDecision.STRONG_PUT || quantEval?.decision == QuantSignalEngine.SignalDecision.PUT -> "DOWN"
+            else -> prediction
+        }
+
+        val finalSignalScore = quantEval?.signalScore ?: confidence
+        val finalGrade = quantEval?.setupGrade ?: (if (finalPrediction == "NO_CHART") "NO TRADE" else "B")
+        val finalRecommendation = quantEval?.recommendation ?: (if (finalPrediction == "NO_CHART") "NO TRADE" else "VALID SETUP")
+
+        val finalAdvice = when (finalPrediction) {
+            "NO_CHART" -> "OPEN TRADING CHART & TRY AGAIN"
+            "UP" -> if (finalGrade == "A+" || finalGrade == "A") "STRONG CALL (NEXT 1-MIN CANDLE)" else "ENTER NOW (CALL / UP)"
+            "DOWN" -> if (finalGrade == "A+" || finalGrade == "A") "STRONG PUT (NEXT 1-MIN CANDLE)" else "ENTER NOW (PUT / DOWN)"
+            else -> "NO TRADE (WAIT FOR CONFLUENCE)"
+        }
 
         val riskLevel = json.optString("risk_level", when (finalPrediction) {
-            "UP", "DOWN" -> "LOW"
-            "UNCERTAIN" -> "MEDIUM"
+            "UP", "DOWN" -> if (finalGrade == "A+" || finalGrade == "A") "LOW" else "MEDIUM"
             else -> "HIGH"
         }).uppercase()
+
+        val reasonsList = if (quantEval != null && quantEval.reasons.isNotEmpty()) quantEval.reasons else confirmationsList
+        val warningsList = quantEval?.warnings ?: emptyList()
 
         return PredictionResult(
             prediction = finalPrediction,
             isChartDetected = (finalPrediction != "NO_CHART"),
-            confidence = finalConfidence,
-            primarySignal = finalPrimarySignal,
+            confidence = finalSignalScore, // Signal score out of 100
+            primarySignal = primarySignal,
             confirmations = confirmationsList,
             candlePatternFound = candlePattern,
             srZone = srZone,
@@ -342,7 +375,14 @@ class MistralApiClient {
             trend = trend,
             riskLevel = riskLevel,
             advice = finalAdvice,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+            signalScore = finalSignalScore,
+            setupGrade = finalGrade,
+            setupRecommendation = finalRecommendation,
+            marketStructure = if (marketStructure.isNotBlank()) marketStructure else if (isUptrend) "BULLISH_HH_HL" else if (isDowntrend) "BEARISH_LH_LL" else "RANGING",
+            liquidityStatus = liquiditySweep,
+            reasons = reasonsList,
+            warnings = warningsList
         )
     }
 

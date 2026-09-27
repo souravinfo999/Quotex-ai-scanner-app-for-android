@@ -249,8 +249,8 @@ fun DashboardScreen(
                 )
                 TelemetryTile(
                     icon = Icons.Default.Verified,
-                    label = "ACCURACY",
-                    value = "≥${settings.confidenceThreshold}%",
+                    label = "SCORE THRESHOLD",
+                    value = "≥${settings.confidenceThreshold}/100",
                     accentColor = BullishGreen,
                     modifier = Modifier.weight(1f)
                 )

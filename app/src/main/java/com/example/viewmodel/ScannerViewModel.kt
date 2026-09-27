@@ -114,6 +114,12 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun loadAuditBenchmark() {
+        viewModelScope.launch {
+            repository.loadAuditBenchmarkTrades()
+        }
+    }
+
     fun clearHistory() {
         viewModelScope.launch {
             repository.clearHistory()

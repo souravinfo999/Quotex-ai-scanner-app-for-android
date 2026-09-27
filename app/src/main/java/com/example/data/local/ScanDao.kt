@@ -15,6 +15,9 @@ interface ScanDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertScan(scan: ScanEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertScans(scans: List<ScanEntity>): List<Long>
+
     @Query("UPDATE scans SET userOutcome = :outcome WHERE id = :id")
     suspend fun updateOutcome(id: Long, outcome: String)
 

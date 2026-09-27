@@ -4,7 +4,7 @@ data class PredictionResult(
     val id: Long = 0L,
     val prediction: String, // "UP", "DOWN", "UNCERTAIN", "NO_CHART"
     val isChartDetected: Boolean = true,
-    val confidence: Int, // 0 - 100
+    val confidence: Int, // 0 - 100 (Backwards compatible alias for Signal Score)
     val primarySignal: String,
     val confirmations: List<String> = emptyList(),
     val candlePatternFound: String = "None",
@@ -18,12 +18,24 @@ data class PredictionResult(
     val advice: String = "Wait", // "Enter now", "Wait", "Avoid"
     val timestamp: Long = System.currentTimeMillis(),
     val isSample: Boolean = false,
-    val userOutcome: String? = null // "WIN", "LOSS", null
+    val userOutcome: String? = null, // "WIN", "LOSS", null
+    val signalScore: Int = confidence, // 0..100 Setup Quality Score
+    val setupGrade: String = "B", // "A+", "A", "B", "C", "NO TRADE"
+    val setupRecommendation: String = "VALID SETUP", // "STRONG SETUP", "VALID SETUP", "WAIT / WEAK SETUP", "NO TRADE"
+    val marketStructure: String = "None", // "BULLISH_HH_HL", "BEARISH_LH_LL", "CHoCH", "RANGING"
+    val liquidityStatus: String = "None",
+    val reasons: List<String> = emptyList(), // Confluences (✓)
+    val warnings: List<String> = emptyList(), // Cautions (⚠)
+    val failureReason: String? = null // For post-loss diagnostic audit
 ) {
     val isUp: Boolean get() = prediction.equals("UP", ignoreCase = true)
     val isDown: Boolean get() = prediction.equals("DOWN", ignoreCase = true)
     val isNoChart: Boolean get() = !isChartDetected || prediction.equals("NO_CHART", ignoreCase = true)
     val isUncertain: Boolean get() = !isUp && !isDown && !isNoChart
+    val isStrongUp: Boolean get() = isUp && (setupGrade == "A" || setupGrade == "A+")
+    val isStrongDown: Boolean get() = isDown && (setupGrade == "A" || setupGrade == "A+")
+    val isNoTrade: Boolean get() = isUncertain || setupGrade == "NO TRADE" || setupRecommendation.contains("NO TRADE", ignoreCase = true)
+    val effectiveScore: Int get() = if (signalScore > 0) signalScore else confidence
     val hasOrderBlock: Boolean get() = !orderBlockZone.equals("None", ignoreCase = true) && orderBlockZone.isNotBlank()
     val hasLiquiditySweep: Boolean get() = !liquiditySweep.equals("None", ignoreCase = true) && liquiditySweep.isNotBlank()
     val hasOtcTrap: Boolean get() = !otcPatternTrap.equals("None", ignoreCase = true) && otcPatternTrap.isNotBlank()

@@ -243,6 +243,9 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onClearHistory = {
                                         viewModel.clearHistory()
+                                    },
+                                    onLoadBenchmark = {
+                                        viewModel.loadAuditBenchmark()
                                     }
                                 )
                             }

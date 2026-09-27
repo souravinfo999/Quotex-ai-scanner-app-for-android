@@ -58,9 +58,12 @@ class PredictionPopupView(
         // Exact Professional Polish gradients
         val (bgStart, bgEnd, icon, titleText, pulseColor) = when {
             result.isNoChart -> Quintuple("#FF8F00", "#FF6F00", "📊❌", "NO CHART FOUND", "#FF6F00")
-            result.isUp -> Quintuple("#00C853", "#00E676", "📈", "NEXT: UP", "#00E676")
-            result.isDown -> Quintuple("#FF3D00", "#FF6E40", "📉", "NEXT: DOWN", "#FF3D00")
-            else -> Quintuple("#FFB300", "#FFD54F", "⚠️", "NEXT: UNCERTAIN", "#FFB300")
+            result.isNoTrade -> Quintuple("#FFB300", "#FF8F00", "⚠️", "NO TRADE / WAIT", "#FFB300")
+            result.isStrongUp -> Quintuple("#00C853", "#00E676", "📈🔥", "STRONG CALL", "#00E676")
+            result.isUp -> Quintuple("#00C853", "#00E676", "📈", "NEXT: CALL (UP)", "#00E676")
+            result.isStrongDown -> Quintuple("#FF3D00", "#FF6E40", "📉🔥", "STRONG PUT", "#FF3D00")
+            result.isDown -> Quintuple("#FF3D00", "#FF6E40", "📉", "NEXT: PUT (DOWN)", "#FF3D00")
+            else -> Quintuple("#FFB300", "#FFD54F", "⚠️", "WAIT / NO TRADE", "#FFB300")
         }
 
         // Card Container Background (rounded-3xl 24dp, border white/20)
@@ -157,22 +160,22 @@ class PredictionPopupView(
 
         addSpace(12)
 
-        // 2. Accuracy Confidence Bar
+        // 2. Setup Score Bar (Not Probability)
         val confRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         val confLabel = TextView(context).apply {
-            text = if (result.isNoChart) "CHART STATUS" else "ACCURACY CONFIDENCE"
-            textSize = 11f
+            text = if (result.isNoChart) "CHART STATUS" else "SIGNAL SCORE (${result.setupRecommendation})"
+            textSize = 10f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.BLACK)
-            letterSpacing = 0.05f
+            letterSpacing = 0.04f
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         }
         val confBadge = TextView(context).apply {
-            text = if (result.isNoChart) "NOT FOUND" else "${result.confidence}%"
-            textSize = 11f
+            text = if (result.isNoChart) "NOT FOUND" else "${result.effectiveScore}/100 • GRADE ${result.setupGrade}"
+            textSize = 10f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.BLACK)
             val pX = dpToPx(6)
@@ -187,11 +190,11 @@ class PredictionPopupView(
         confRow.addView(confBadge)
         containerLayout.addView(confRow)
 
-        // Confidence progress track (h-3 bg-black/10 rounded-full p-0.5 with black fill)
+        // Score progress track
         if (!result.isNoChart) {
             val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
                 max = 100
-                progress = result.confidence
+                progress = result.effectiveScore
                 val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(10)).apply {
                     topMargin = dpToPx(4)
                 }
