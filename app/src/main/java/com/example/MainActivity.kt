@@ -15,11 +15,22 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,10 +39,8 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,10 +50,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,10 +67,14 @@ import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SplashScreen
 import com.example.ui.theme.BackgroundDark
+import com.example.ui.theme.ElectricGreen
+import com.example.ui.theme.ElectricGreenBorder
+import com.example.ui.theme.ElectricGreenTransparent
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.PrimaryTeal
 import com.example.ui.theme.PrimaryTealAlpha20
 import com.example.ui.theme.SurfaceBorder
+import com.example.ui.theme.SurfaceBorderSubtle
 import com.example.ui.theme.SurfaceCard
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
@@ -159,95 +176,10 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         containerColor = BackgroundDark,
                         bottomBar = {
-                            NavigationBar(
-                                containerColor = SurfaceCard,
-                                contentColor = TextPrimary,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(1.dp, SurfaceBorder, RoundedCornerShape(0.dp))
-                            ) {
-                                NavigationBarItem(
-                                    selected = selectedTab == 0,
-                                    onClick = { selectedTab = 0 },
-                                    icon = {
-                                        Icon(
-                                            Icons.Default.BarChart,
-                                            contentDescription = "Scanner",
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            "SCANNER",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Black,
-                                            letterSpacing = 0.5.sp
-                                        )
-                                    },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = PrimaryTeal,
-                                        selectedTextColor = PrimaryTeal,
-                                        indicatorColor = PrimaryTealAlpha20,
-                                        unselectedIconColor = TextSecondary.copy(alpha = 0.5f),
-                                        unselectedTextColor = TextSecondary.copy(alpha = 0.5f)
-                                    ),
-                                    modifier = Modifier.testTag("nav_dashboard")
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 1,
-                                    onClick = { selectedTab = 1 },
-                                    icon = {
-                                        Icon(
-                                            Icons.Default.Tune,
-                                            contentDescription = "Config",
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            "CONFIG",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Black,
-                                            letterSpacing = 0.5.sp
-                                        )
-                                    },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = PrimaryTeal,
-                                        selectedTextColor = PrimaryTeal,
-                                        indicatorColor = PrimaryTealAlpha20,
-                                        unselectedIconColor = TextSecondary.copy(alpha = 0.5f),
-                                        unselectedTextColor = TextSecondary.copy(alpha = 0.5f)
-                                    ),
-                                    modifier = Modifier.testTag("nav_settings")
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 2,
-                                    onClick = { selectedTab = 2 },
-                                    icon = {
-                                        Icon(
-                                            Icons.Default.History,
-                                            contentDescription = "History",
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            "HISTORY",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Black,
-                                            letterSpacing = 0.5.sp
-                                        )
-                                    },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = PrimaryTeal,
-                                        selectedTextColor = PrimaryTeal,
-                                        indicatorColor = PrimaryTealAlpha20,
-                                        unselectedIconColor = TextSecondary.copy(alpha = 0.5f),
-                                        unselectedTextColor = TextSecondary.copy(alpha = 0.5f)
-                                    ),
-                                    modifier = Modifier.testTag("nav_history")
-                                )
-                            }
+                            CyberBottomNavBar(
+                                selectedTab = selectedTab,
+                                onTabSelected = { selectedTab = it }
+                            )
                         }
                     ) { innerPadding ->
                         Box(modifier = Modifier.padding(innerPadding)) {
@@ -363,5 +295,123 @@ class MainActivity : ComponentActivity() {
         OverlayService.stop(this)
         viewModel.updateServiceRunningState(false)
         Toast.makeText(this, "Floating Scanner Stopped", Toast.LENGTH_SHORT).show()
+    }
+}
+
+@Composable
+private fun CyberBottomNavBar(
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xF20E111B), // Translucent frosted cyber glass
+            border = BorderStroke(
+                1.2.dp,
+                Brush.horizontalGradient(
+                    listOf(
+                        SurfaceBorderSubtle,
+                        ElectricGreenBorder,
+                        SurfaceBorderSubtle
+                    )
+                )
+            ),
+            shadowElevation = 16.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CyberNavItem(
+                    selected = selectedTab == 0,
+                    icon = Icons.Default.BarChart,
+                    label = "SCANNER",
+                    testTag = "nav_dashboard",
+                    onClick = { onTabSelected(0) }
+                )
+                CyberNavItem(
+                    selected = selectedTab == 1,
+                    icon = Icons.Default.Tune,
+                    label = "CONFIG",
+                    testTag = "nav_settings",
+                    onClick = { onTabSelected(1) }
+                )
+                CyberNavItem(
+                    selected = selectedTab == 2,
+                    icon = Icons.Default.History,
+                    label = "HISTORY",
+                    testTag = "nav_history",
+                    onClick = { onTabSelected(2) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.CyberNavItem(
+    selected: Boolean,
+    icon: ImageVector,
+    label: String,
+    testTag: String,
+    onClick: () -> Unit
+) {
+    val animatedBg by animateColorAsState(
+        targetValue = if (selected) ElectricGreenTransparent else Color.Transparent,
+        animationSpec = tween(220),
+        label = "nav_item_bg"
+    )
+    val animatedBorder by animateColorAsState(
+        targetValue = if (selected) ElectricGreenBorder else Color.Transparent,
+        animationSpec = tween(220),
+        label = "nav_item_border"
+    )
+    val iconAndTextColor by animateColorAsState(
+        targetValue = if (selected) ElectricGreen else TextSecondary.copy(alpha = 0.55f),
+        animationSpec = tween(180),
+        label = "nav_item_color"
+    )
+
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .height(52.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(animatedBg)
+            .border(1.dp, animatedBorder, RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .testTag(testTag),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = iconAndTextColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = label,
+                fontSize = 10.sp,
+                fontWeight = if (selected) FontWeight.Black else FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 0.6.sp,
+                color = iconAndTextColor
+            )
+        }
     }
 }

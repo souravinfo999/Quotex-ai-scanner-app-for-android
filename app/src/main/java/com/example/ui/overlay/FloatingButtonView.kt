@@ -164,7 +164,7 @@ class FloatingButtonView(
             val arcRect = RectF(pad + dpToPx(1f), pad + dpToPx(1f), w - pad - dpToPx(1f), h - pad - dpToPx(1f))
             progressPaint.color = Color.parseColor("#00E676")
             canvas.drawArc(arcRect, scanRotation, 110f, false, progressPaint)
-            progressPaint.color = Color.parseColor("#00D4AA")
+            progressPaint.color = Color.parseColor("#00F576")
             canvas.drawArc(arcRect, scanRotation + 180f, 90f, false, progressPaint)
         }
 

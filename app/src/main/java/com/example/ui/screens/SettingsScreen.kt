@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -63,6 +64,9 @@ import com.example.ui.theme.AccentPurple
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.BearishRed
 import com.example.ui.theme.BullishGreen
+import com.example.ui.theme.ElectricGreen
+import com.example.ui.theme.ElectricGreenBorder
+import com.example.ui.theme.ElectricGreenTransparent
 import com.example.ui.theme.PrimaryTeal
 import com.example.ui.theme.PrimaryTealAlpha20
 import com.example.ui.theme.SurfaceBorder
@@ -104,17 +108,18 @@ fun SettingsScreen(
     ) {
         // Professional Header
         Text(
-            text = "AI Scanner Configuration",
+            text = "AI Scanner Engine Setup",
             fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = PrimaryTeal,
+            fontWeight = FontWeight.Black,
+            color = Color.White,
             letterSpacing = (-0.5).sp
         )
         Text(
-            text = "MISTRAL-VISION-PIXTRAL • ALGORITHM SETUP",
+            text = "MISTRAL-VISION-PIXTRAL • PARAMETERS & OTC ENGINE",
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp,
-            color = TextSecondary,
+            fontWeight = FontWeight.SemiBold,
+            color = PrimaryTeal,
             letterSpacing = 1.sp,
             modifier = Modifier.padding(top = 2.dp, bottom = 14.dp)
         )
@@ -189,18 +194,22 @@ fun SettingsScreen(
                         onClick = { onTestConnection(apiKey) },
                         enabled = apiKey.isNotBlank() && testConnectionState !is TestConnectionState.Loading,
                         shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, if (apiKey.isNotBlank()) ElectricGreenBorder else SurfaceBorderSubtle),
+                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                            containerColor = ElectricGreenTransparent
+                        ),
                         modifier = Modifier.testTag("test_connection_button")
                     ) {
                         if (testConnectionState is TestConnectionState.Loading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(14.dp),
                                 strokeWidth = 2.dp,
-                                color = PrimaryTeal
+                                color = ElectricGreen
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Testing...", fontSize = 11.sp)
+                            Text("Testing...", fontSize = 11.sp, color = ElectricGreen)
                         } else {
-                            Text("Test Connection ⚡", color = PrimaryTeal, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Test Connection ⚡", color = ElectricGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -409,14 +418,17 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .height(48.dp)
                 .testTag("save_and_start_button"),
-            colors = ButtonDefaults.buttonColors(containerColor = PrimaryTeal),
-            shape = RoundedCornerShape(12.dp)
+            colors = ButtonDefaults.buttonColors(containerColor = ElectricGreenTransparent),
+            border = BorderStroke(1.2.dp, ElectricGreenBorder),
+            shape = RoundedCornerShape(14.dp)
         ) {
             Text(
                 text = "Save & Launch Floating Scanner 🚀",
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                color = BackgroundDark
+                fontWeight = FontWeight.Black,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 13.sp,
+                letterSpacing = 0.5.sp,
+                color = ElectricGreen
             )
         }
 

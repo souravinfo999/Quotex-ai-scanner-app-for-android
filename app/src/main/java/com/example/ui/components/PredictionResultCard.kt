@@ -59,6 +59,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private data class CardThemeData(
+    val badgeColor: Color,
+    val titleText: String,
+    val actionSubtitle: String,
+    val gradientBg: Brush,
+    val cardBorderColor: Color
+)
+
 @Composable
 fun PredictionResultCard(
     result: PredictionResult,
@@ -67,34 +75,44 @@ fun PredictionResultCard(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    val (badgeColor, titleText, gradientBg) = when {
-        result.isNoChart -> Triple(
+    val theme = when {
+        result.isNoChart -> CardThemeData(
             UncertainYellow,
-            "📊 NO CHART FOUND",
-            Brush.verticalGradient(listOf(Color(0xFFFF8F00).copy(alpha = 0.15f), SurfaceCard))
+            "NO CHART DETECTED",
+            "Open Quotex / Broker Chart",
+            Brush.verticalGradient(listOf(Color(0x33FFB800), SurfaceCard)),
+            Color(0x4DFFB800)
         )
-        result.isUp -> Triple(
+        result.isUp -> CardThemeData(
             BullishGreen,
-            "📈 NEXT: UP",
-            Brush.verticalGradient(listOf(Color(0xFF00C853).copy(alpha = 0.12f), SurfaceCard))
+            "NEXT CANDLE: CALL (UP)",
+            "BUY 1-MIN CALL",
+            Brush.verticalGradient(listOf(Color(0x2E00F576), SurfaceCard)),
+            Color(0x5900F576)
         )
-        result.isDown -> Triple(
+        result.isDown -> CardThemeData(
             BearishRed,
-            "📉 NEXT: DOWN",
-            Brush.verticalGradient(listOf(Color(0xFFFF3D00).copy(alpha = 0.12f), SurfaceCard))
+            "NEXT CANDLE: PUT (DOWN)",
+            "BUY 1-MIN PUT",
+            Brush.verticalGradient(listOf(Color(0x2EFF3838), SurfaceCard)),
+            Color(0x59FF3838)
         )
-        else -> Triple(
+        else -> CardThemeData(
             UncertainYellow,
-            "⚠️ NEXT: UNCERTAIN",
-            Brush.verticalGradient(listOf(Color(0xFFFFB300).copy(alpha = 0.12f), SurfaceCard))
+            "NEXT: UNCERTAIN",
+            "WAIT FOR HIGH CONFLUENCE",
+            Brush.verticalGradient(listOf(Color(0x29FFC01E), SurfaceCard)),
+            Color(0x4DFFC01E)
         )
     }
+
+    val (badgeColor, titleText, actionSubtitle, gradientBg, cardBorderColor) = theme
 
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .border(1.dp, SurfaceBorder, RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .border(1.2.dp, cardBorderColor, RoundedCornerShape(20.dp))
             .testTag("prediction_result_card_${result.id}"),
         colors = CardDefaults.cardColors(containerColor = SurfaceCard)
     ) {
@@ -112,136 +130,189 @@ fun PredictionResultCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color.Black)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .border(1.dp, badgeColor.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = "AI SIGNAL",
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
-                            color = Color.White
+                            letterSpacing = 0.8.sp,
+                            color = badgeColor
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     val scanNum = (result.timestamp % 9000 + 1000)
                     Text(
                         text = "#SCAN-$scanNum",
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextSecondary
                     )
                 }
 
-                val formattedTime = SimpleDateFormat("hh:mm a", Locale.getDefault())
-                    .format(Date(result.timestamp))
-                Text(
-                    text = formattedTime,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
-                    color = TextSecondary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Large Title Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = titleText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    fontStyle = FontStyle.Italic,
-                    letterSpacing = (-0.5).sp,
-                    color = badgeColor
-                )
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.4f))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(badgeColor, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    val formattedTime = SimpleDateFormat("hh:mm a", Locale.getDefault())
+                        .format(Date(result.timestamp))
                     Text(
-                        text = "${result.confidence}%",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        color = badgeColor
+                        text = formattedTime,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        color = TextSecondary
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Accuracy Confidence Progress
+            // Large Directional Action Hero Banner
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "ACCURACY CONFIDENCE",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextSecondary,
-                    letterSpacing = 0.5.sp
-                )
+                Column {
+                    Text(
+                        text = titleText,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = (-0.3).sp,
+                        color = badgeColor
+                    )
+                    Text(
+                        text = actionSubtitle,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        color = TextPrimary.copy(alpha = 0.9f),
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .border(1.dp, badgeColor.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${result.confidence}%",
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 15.sp,
+                            color = badgeColor
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "ACC",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextSecondary
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
+            // Accuracy Confidence Progress Bar
             LinearProgressIndicator(
-                progress = { result.confidence / 100f },
+                progress = { (result.confidence / 100f).coerceIn(0f, 1f) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp)),
                 color = badgeColor,
-                trackColor = Color.Black.copy(alpha = 0.4f)
+                trackColor = Color.Black.copy(alpha = 0.5f)
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Primary Signal Box: bg-black/20 p-3 rounded-xl border border-white/5
+            // Primary Signal Card
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black.copy(alpha = 0.25f))
-                    .border(1.dp, SurfaceBorderSubtle, RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .border(1.dp, SurfaceBorderSubtle, RoundedCornerShape(14.dp))
                     .padding(12.dp)
             ) {
-                Text(
-                    text = "🎯 Primary Signal: ${result.primarySignal}",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                    lineHeight = 16.sp
-                )
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "🎯 PRIMARY TRIGGER",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 0.8.sp,
+                            color = PrimaryTeal
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(
+                            text = "1-MIN EXPIRY",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = result.primarySignal,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
+                        lineHeight = 18.sp
+                    )
+                }
             }
 
             if (result.hasOtcTrap) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(BullishGreen.copy(alpha = 0.12f))
-                        .border(1.dp, BullishGreen.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(BullishGreen.copy(alpha = 0.14f))
+                        .border(1.dp, BullishGreen.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
-                    Text(
-                        text = "⚡ OTC STRATEGY: ${result.otcPatternTrap}",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = BullishGreen
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "⚡",
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "QUOTEX OTC ALGO STRATEGY",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 0.5.sp,
+                                color = BullishGreen
+                            )
+                            Text(
+                                text = result.otcPatternTrap,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                    }
                 }
             }
 
@@ -352,19 +423,47 @@ fun PredictionResultCard(
                                 )
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val isWin = result.userOutcome == "WIN"
+                                val isLoss = result.userOutcome == "LOSS"
+
                                 OutlinedButton(
                                     onClick = { onMarkOutcome("WIN") },
-                                    modifier = Modifier.height(28.dp),
-                                    shape = RoundedCornerShape(8.dp)
+                                    modifier = Modifier.height(30.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isWin) BullishGreen else BullishGreen.copy(alpha = 0.4f)
+                                    ),
+                                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (isWin) BullishGreen.copy(alpha = 0.25f) else Color.Transparent
+                                    )
                                 ) {
-                                    Text("WIN +92%", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = BullishGreen)
+                                    Text(
+                                        text = if (isWin) "✓ WIN +92%" else "WIN +92%",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BullishGreen
+                                    )
                                 }
+
                                 OutlinedButton(
                                     onClick = { onMarkOutcome("LOSS") },
-                                    modifier = Modifier.height(28.dp),
-                                    shape = RoundedCornerShape(8.dp)
+                                    modifier = Modifier.height(30.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isLoss) BearishRed else BearishRed.copy(alpha = 0.4f)
+                                    ),
+                                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (isLoss) BearishRed.copy(alpha = 0.25f) else Color.Transparent
+                                    )
                                 ) {
-                                    Text("LOSS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = BearishRed)
+                                    Text(
+                                        text = if (isLoss) "✓ LOSS" else "LOSS",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BearishRed
+                                    )
                                 }
                             }
                         }

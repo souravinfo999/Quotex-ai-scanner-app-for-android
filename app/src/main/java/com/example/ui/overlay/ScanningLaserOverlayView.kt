@@ -27,7 +27,7 @@ class ScanningLaserOverlayView(context: Context) : View(context) {
         private set
 
     private val laserLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#00D4AA")
+        color = Color.parseColor("#00F576")
         strokeWidth = 3f * density
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
@@ -43,13 +43,13 @@ class ScanningLaserOverlayView(context: Context) : View(context) {
     }
 
     private val hudBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#8000D4AA")
+        color = Color.parseColor("#8000F576")
         strokeWidth = 1.2f * density
         style = Paint.Style.STROKE
     }
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#00D4AA")
+        color = Color.parseColor("#00F576")
         textSize = 13f * density
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
@@ -133,7 +133,7 @@ class ScanningLaserOverlayView(context: Context) : View(context) {
             0f, currentY - glowHeight,
             0f, currentY,
             Color.TRANSPARENT,
-            Color.argb(70, 0, 212, 170),
+            Color.argb(70, 0, 245, 118),
             Shader.TileMode.CLAMP
         )
         laserGlowPaint.shader = glowShader

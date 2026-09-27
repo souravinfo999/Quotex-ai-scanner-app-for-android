@@ -23,8 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.ScreenShare
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Wifi
@@ -161,7 +161,7 @@ fun SplashScreen(
                         title = "Display Over Other Apps",
                         description = "Enables draggable floating scanner button & signal popup over Quotex",
                         isGranted = hasOverlayPermission,
-                        icon = Icons.Default.Layers,
+                        icon = Icons.Default.PictureInPicture,
                         onGrant = onRequestOverlay
                     )
 
