@@ -20,7 +20,10 @@ class PreferenceManager(context: Context) {
             confidenceThreshold = prefs.getInt(KEY_THRESHOLD, 70),
             scanDelayMs = prefs.getLong(KEY_SCAN_DELAY, 500L),
             analysisMode = prefs.getString(KEY_MODE, "fast") ?: "fast",
-            preferredModel = prefs.getString(KEY_MODEL, "pixtral-12b-2409") ?: "pixtral-12b-2409"
+            preferredModel = prefs.getString(KEY_MODEL, "pixtral-12b-2409") ?: "pixtral-12b-2409",
+            telegramBotToken = prefs.getString(KEY_TELEGRAM_BOT_TOKEN, "") ?: "",
+            telegramChatId = prefs.getString(KEY_TELEGRAM_CHAT_ID, "") ?: "",
+            telegramEnabled = prefs.getBoolean(KEY_TELEGRAM_ENABLED, false)
         )
     }
 
@@ -29,7 +32,10 @@ class PreferenceManager(context: Context) {
         confidenceThreshold: Int,
         scanDelayMs: Long,
         analysisMode: String,
-        preferredModel: String
+        preferredModel: String,
+        telegramBotToken: String,
+        telegramChatId: String,
+        telegramEnabled: Boolean
     ) {
         prefs.edit()
             .putString(KEY_API_KEY, apiKey)
@@ -37,9 +43,33 @@ class PreferenceManager(context: Context) {
             .putLong(KEY_SCAN_DELAY, scanDelayMs)
             .putString(KEY_MODE, analysisMode)
             .putString(KEY_MODEL, preferredModel)
+            .putString(KEY_TELEGRAM_BOT_TOKEN, telegramBotToken.trim())
+            .putString(KEY_TELEGRAM_CHAT_ID, telegramChatId.trim())
+            .putBoolean(KEY_TELEGRAM_ENABLED, telegramEnabled)
             .apply()
 
         _settingsFlow.value = getSettings()
+    }
+
+    /**
+     * Persists the last processed scan fingerprint so the duplicate-signal
+     * filter keeps working even after the app process is killed/restarted.
+     */
+    fun saveLastScanFingerprint(direction: String, structure: String, timestamp: Long) {
+        prefs.edit()
+            .putString(KEY_LAST_SCAN_DIR, direction)
+            .putString(KEY_LAST_SCAN_STRUCT, structure)
+            .putLong(KEY_LAST_SCAN_TS, timestamp)
+            .apply()
+    }
+
+    fun getLastScanFingerprint(): Triple<String, String, Long>? {
+        val ts = prefs.getLong(KEY_LAST_SCAN_TS, 0L)
+        if (ts == 0L) return null
+        val dir = prefs.getString(KEY_LAST_SCAN_DIR, "") ?: ""
+        if (dir.isBlank()) return null
+        val struct = prefs.getString(KEY_LAST_SCAN_STRUCT, "") ?: ""
+        return Triple(dir, struct, ts)
     }
 
     fun setOverlayActive(active: Boolean) {
@@ -55,6 +85,12 @@ class PreferenceManager(context: Context) {
         private const val KEY_MODE = "key_analysis_mode"
         private const val KEY_MODEL = "key_preferred_model"
         private const val KEY_OVERLAY_ACTIVE = "key_overlay_active"
+        private const val KEY_TELEGRAM_BOT_TOKEN = "key_telegram_bot_token"
+        private const val KEY_TELEGRAM_CHAT_ID = "key_telegram_chat_id"
+        private const val KEY_TELEGRAM_ENABLED = "key_telegram_enabled"
+        private const val KEY_LAST_SCAN_DIR = "key_last_scan_dir"
+        private const val KEY_LAST_SCAN_STRUCT = "key_last_scan_struct"
+        private const val KEY_LAST_SCAN_TS = "key_last_scan_ts"
 
         @Volatile
         private var INSTANCE: PreferenceManager? = null

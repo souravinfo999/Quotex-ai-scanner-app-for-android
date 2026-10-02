@@ -34,6 +34,13 @@
             android:name=".service.OverlayService"
             android:foregroundServiceType="mediaProjection"
             android:exported="false" />
+
+        <receiver
+            android:name=".service.OutcomeReminderReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".service.OutcomeActionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

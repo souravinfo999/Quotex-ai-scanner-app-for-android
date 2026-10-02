@@ -150,6 +150,7 @@ class MainActivity : ComponentActivity() {
                 val recentScans by viewModel.recentScans.collectAsState()
                 val isServiceRunning by viewModel.isServiceRunning.collectAsState()
                 val testState by viewModel.testConnectionState.collectAsState()
+                val telegramTestState by viewModel.telegramTestState.collectAsState()
                 val analysisState by viewModel.analysisState.collectAsState()
 
                 var showSplash by remember {
@@ -218,8 +219,12 @@ class MainActivity : ComponentActivity() {
                                 1 -> SettingsScreen(
                                     currentSettings = settings,
                                     testConnectionState = testState,
+                                    telegramTestState = telegramTestState,
                                     onTestConnection = { key ->
                                         viewModel.testConnection(key)
+                                    },
+                                    onTestTelegram = { token, chatId ->
+                                        viewModel.testTelegram(token, chatId)
                                     },
                                     onSaveAndStart = { updatedSettings ->
                                         viewModel.saveSettings(
@@ -227,13 +232,19 @@ class MainActivity : ComponentActivity() {
                                             updatedSettings.confidenceThreshold,
                                             updatedSettings.scanDelayMs,
                                             updatedSettings.analysisMode,
-                                            updatedSettings.preferredModel
+                                            updatedSettings.preferredModel,
+                                            updatedSettings.telegramBotToken,
+                                            updatedSettings.telegramChatId,
+                                            updatedSettings.telegramEnabled
                                         )
                                         Toast.makeText(this@MainActivity, "Settings Saved!", Toast.LENGTH_SHORT).show()
                                         startFloatingScanner()
                                     },
                                     onResetTestState = {
                                         viewModel.resetTestState()
+                                    },
+                                    onResetTelegramTestState = {
+                                        viewModel.resetTelegramTestState()
                                     }
                                 )
                                 2 -> HistoryScreen(

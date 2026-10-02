@@ -25,6 +25,7 @@ class PredictionPopupView(
 ) : FrameLayout(context) {
 
     private var countdownTimer: CountDownTimer? = null
+    private var candleCountdownTimer: CountDownTimer? = null
     private val containerLayout: LinearLayout
 
     init {
@@ -346,6 +347,37 @@ class PredictionPopupView(
         }
         containerLayout.addView(actionButton)
 
+        // 6. Next 1M candle countdown — 1-minute binary options are most accurate
+        // when the scan happens right at the candle open.
+        if (!result.isNoChart) {
+            addSpace(8)
+            val candleCountdownTv = TextView(context).apply {
+                textSize = 11f
+                typeface = Typeface.MONOSPACE
+                setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+                setTextColor(Color.parseColor("#CC000000"))
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+            containerLayout.addView(candleCountdownTv)
+
+            val msToNextCandle = 60_000L - (System.currentTimeMillis() % 60_000L)
+            candleCountdownTimer?.cancel()
+            candleCountdownTimer = object : CountDownTimer(msToNextCandle, 1000) {
+                override fun onTick(millisUntilFinished: Long) {
+                    val sec = millisUntilFinished / 1000
+                    candleCountdownTv.text = "⏳ Next 1M candle in ${sec}s — scan at candle open"
+                }
+
+                override fun onFinish() {
+                    candleCountdownTv.text = "🕯️ New candle opened — scan now!"
+                }
+            }.start()
+        }
+
         // Countdown timer (6s for no-chart, 5s for trading signals)
         val countdownMillis = if (result.isNoChart) 6000L else 5000L
         countdownTimer?.cancel()
@@ -382,6 +414,8 @@ class PredictionPopupView(
     fun dismissWithAnimation() {
         countdownTimer?.cancel()
         countdownTimer = null
+        candleCountdownTimer?.cancel()
+        candleCountdownTimer = null
         animate()
             .alpha(0f)
             .setDuration(180)

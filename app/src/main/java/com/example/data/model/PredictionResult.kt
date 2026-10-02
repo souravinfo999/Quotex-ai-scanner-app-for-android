@@ -46,5 +46,8 @@ data class ScanSettings(
     val confidenceThreshold: Int = 70, // 50 to 95
     val scanDelayMs: Long = 500L, // 300 to 2000
     val analysisMode: String = "fast", // "fast" or "deep"
-    val preferredModel: String = "pixtral-12b-2409"
+    val preferredModel: String = "pixtral-12b-2409",
+    val telegramBotToken: String = "",
+    val telegramChatId: String = "",
+    val telegramEnabled: Boolean = false
 )

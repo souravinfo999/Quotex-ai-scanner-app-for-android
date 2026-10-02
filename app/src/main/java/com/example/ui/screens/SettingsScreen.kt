@@ -40,6 +40,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -80,9 +82,12 @@ import com.example.viewmodel.TestConnectionState
 fun SettingsScreen(
     currentSettings: ScanSettings,
     testConnectionState: TestConnectionState,
+    telegramTestState: TestConnectionState,
     onTestConnection: (String) -> Unit,
+    onTestTelegram: (String, String) -> Unit,
     onSaveAndStart: (ScanSettings) -> Unit,
     onResetTestState: () -> Unit,
+    onResetTelegramTestState: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var apiKey by remember(currentSettings.apiKey) { mutableStateOf(currentSettings.apiKey) }
@@ -96,6 +101,16 @@ fun SettingsScreen(
     var analysisMode by remember(currentSettings.analysisMode) {
         mutableStateOf(currentSettings.analysisMode)
     }
+    var telegramBotToken by remember(currentSettings.telegramBotToken) {
+        mutableStateOf(currentSettings.telegramBotToken)
+    }
+    var telegramChatId by remember(currentSettings.telegramChatId) {
+        mutableStateOf(currentSettings.telegramChatId)
+    }
+    var telegramEnabled by remember(currentSettings.telegramEnabled) {
+        mutableStateOf(currentSettings.telegramEnabled)
+    }
+    var telegramTokenVisible by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
 
@@ -400,9 +415,167 @@ fun SettingsScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 4. Telegram Signal Alerts Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .border(1.dp, SurfaceBorder, RoundedCornerShape(18.dp)),
+            colors = CardDefaults.cardColors(containerColor = SurfaceCard)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "TELEGRAM SIGNAL ALERTS",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextSecondary,
+                        letterSpacing = 1.sp
+                    )
+                    Switch(
+                        checked = telegramEnabled,
+                        onCheckedChange = { telegramEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = PrimaryTeal,
+                            checkedTrackColor = PrimaryTealAlpha20
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "A / A+ grade signals are auto-posted to your Telegram channel. Create a bot with @BotFather, add it as admin to your channel, then paste the token + channel ID (e.g. @yourchannel).",
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+
+                OutlinedTextField(
+                    value = telegramBotToken,
+                    onValueChange = {
+                        telegramBotToken = it
+                        onResetTelegramTestState()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Bot token (from @BotFather)", color = TextSecondary, fontSize = 13.sp) },
+                    singleLine = true,
+                    visualTransformation = if (telegramTokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        IconButton(onClick = { telegramTokenVisible = !telegramTokenVisible }) {
+                            Icon(
+                                imageVector = if (telegramTokenVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = if (telegramTokenVisible) "Hide token" else "Show token",
+                                tint = TextSecondary
+                            )
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryTeal,
+                        unfocusedBorderColor = SurfaceBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = PrimaryTeal
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = telegramChatId,
+                    onValueChange = {
+                        telegramChatId = it
+                        onResetTelegramTestState()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Channel ID (e.g. @mychannel)", color = TextSecondary, fontSize = 13.sp) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryTeal,
+                        unfocusedBorderColor = SurfaceBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = PrimaryTeal
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { onTestTelegram(telegramBotToken, telegramChatId) },
+                        enabled = telegramBotToken.isNotBlank() && telegramChatId.isNotBlank()
+                                && telegramTestState !is TestConnectionState.Loading,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, if (telegramBotToken.isNotBlank()) ElectricGreenBorder else SurfaceBorderSubtle),
+                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                            containerColor = ElectricGreenTransparent
+                        )
+                    ) {
+                        if (telegramTestState is TestConnectionState.Loading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = ElectricGreen
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Sending...", fontSize = 11.sp, color = ElectricGreen)
+                        } else {
+                            Text("Test Telegram ✈️", color = ElectricGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    when (telegramTestState) {
+                        is TestConnectionState.Success -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = BullishGreen,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Test message sent!", color = BullishGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        is TestConnectionState.Error -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Error,
+                                    contentDescription = null,
+                                    tint = BearishRed,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = telegramTestState.error.take(24),
+                                    color = BearishRed,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 4. Save & Launch Button
+        // 5. Save & Launch Button
         Button(
             onClick = {
                 val updated = ScanSettings(
@@ -410,7 +583,10 @@ fun SettingsScreen(
                     confidenceThreshold = confidenceThreshold.toInt(),
                     scanDelayMs = scanDelayMs.toLong(),
                     analysisMode = analysisMode,
-                    preferredModel = "pixtral-12b-2409"
+                    preferredModel = "pixtral-12b-2409",
+                    telegramBotToken = telegramBotToken,
+                    telegramChatId = telegramChatId,
+                    telegramEnabled = telegramEnabled
                 )
                 onSaveAndStart(updated)
             },

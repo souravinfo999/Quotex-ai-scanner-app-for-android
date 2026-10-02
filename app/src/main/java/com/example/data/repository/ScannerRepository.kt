@@ -10,12 +10,18 @@ import com.example.data.local.AppDatabase
 import com.example.data.local.ScanEntity
 import com.example.data.model.PredictionResult
 import com.example.data.model.ScanSettings
+import com.example.service.OutcomeReminderReceiver
 import com.example.utils.PreferenceManager
+import com.example.utils.TelegramNotifier
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import kotlin.math.sqrt
 
 class ScannerRepository(context: Context) {
     private val appContext = context.applicationContext
@@ -26,6 +32,10 @@ class ScannerRepository(context: Context) {
 
     private var lastProcessedScan: PredictionResult? = null
 
+    // Fire-and-forget scope for side effects (Telegram alerts) that must not
+    // block or fail the main scan pipeline.
+    private val sideEffectScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     val settingsFlow = prefs.settingsFlow
 
     fun getSettings(): ScanSettings = prefs.getSettings()
@@ -35,9 +45,15 @@ class ScannerRepository(context: Context) {
         confidenceThreshold: Int,
         scanDelayMs: Long,
         analysisMode: String,
-        preferredModel: String
+        preferredModel: String,
+        telegramBotToken: String,
+        telegramChatId: String,
+        telegramEnabled: Boolean
     ) {
-        prefs.saveSettings(apiKey, confidenceThreshold, scanDelayMs, analysisMode, preferredModel)
+        prefs.saveSettings(
+            apiKey, confidenceThreshold, scanDelayMs, analysisMode, preferredModel,
+            telegramBotToken, telegramChatId, telegramEnabled
+        )
     }
 
     fun getRecentScans(): Flow<List<PredictionResult>> {
@@ -83,9 +99,20 @@ class ScannerRepository(context: Context) {
         if (apiResult.isSuccess) {
             val result = apiResult.getOrThrow()
 
-            // Duplicate filter check (User requirement 17)
+            // Duplicate filter check (User requirement 17). Falls back to the
+            // persisted fingerprint so it survives app process restarts.
+            val effectiveLastScan = lastProcessedScan ?: prefs.getLastScanFingerprint()?.let { (dir, struct, ts) ->
+                PredictionResult(
+                    id = -1L,
+                    prediction = dir,
+                    confidence = 0,
+                    primarySignal = "",
+                    marketStructure = struct,
+                    timestamp = ts
+                )
+            }
             if (!result.isNoChart && QuantSignalEngine.isDuplicateSignal(
-                    lastScan = lastProcessedScan,
+                    lastScan = effectiveLastScan,
                     direction = result.prediction,
                     structure = result.marketStructure,
                     timestamp = result.timestamp
@@ -102,7 +129,31 @@ class ScannerRepository(context: Context) {
             // Save to database only if a genuine chart was detected
             if (!result.isNoChart) {
                 lastProcessedScan = result
-                saveScan(result)
+                prefs.saveLastScanFingerprint(result.prediction, result.marketStructure, result.timestamp)
+                val savedId = saveScan(result)
+
+                // 60-second outcome reminder: nudge the user to mark WIN/LOSS
+                // so the audit stats stay accurate.
+                if (savedId > 0 && (result.isUp || result.isDown)) {
+                    OutcomeReminderReceiver.schedule(appContext, savedId, result.prediction)
+                }
+
+                // Telegram auto-alert for A/A+ grade directional signals.
+                if (settings.telegramEnabled &&
+                    settings.telegramBotToken.isNotBlank() &&
+                    settings.telegramChatId.isNotBlank() &&
+                    !result.isSample &&
+                    (result.setupGrade == "A+" || result.setupGrade == "A") &&
+                    (result.isUp || result.isDown)
+                ) {
+                    sideEffectScope.launch {
+                        TelegramNotifier.sendSignal(
+                            settings.telegramBotToken,
+                            settings.telegramChatId,
+                            result
+                        )
+                    }
+                }
             }
             Result.success(result)
         } else {
@@ -208,6 +259,7 @@ class ScannerRepository(context: Context) {
             )
         }
         lastProcessedScan = result
+        prefs.saveLastScanFingerprint(result.prediction, result.marketStructure, result.timestamp)
         saveScan(result)
         result
     }
@@ -233,28 +285,50 @@ class ScannerRepository(context: Context) {
         return Base64.encodeToString(byteArray, Base64.NO_WRAP)
     }
 
+    /**
+     * Rejects blank/locked-screen captures without rejecting real charts.
+     *
+     * The old check ("98% near-black pixels = invalid") false-rejected genuine
+     * Quotex screenshots because the dark-theme chart background itself is
+     * near-black. Instead we measure brightness VARIANCE: a blank or locked
+     * screen is uniformly dark, while any real chart (candles, grid, text,
+     * buttons) always has meaningful pixel variation.
+     */
     private fun isBitmapBlankOrBlack(bitmap: Bitmap): Boolean {
         if (bitmap.width <= 10 || bitmap.height <= 10) return true
-        // Sample a few pixels across the image
-        var darkPixelCount = 0
-        val samplePoints = 20
-        val stepX = bitmap.width / (samplePoints + 1)
-        val stepY = bitmap.height / (samplePoints + 1)
+
+        val samplePoints = 24
+        val stepX = maxOf(1, bitmap.width / (samplePoints + 1))
+        val stepY = maxOf(1, bitmap.height / (samplePoints + 1))
+
+        var sum = 0.0
+        var sumSq = 0.0
+        var litPixels = 0
+        var n = 0
 
         for (i in 1..samplePoints) {
             for (j in 1..samplePoints) {
-                val pixel = bitmap.getPixel(i * stepX, j * stepY)
+                val x = (i * stepX).coerceAtMost(bitmap.width - 1)
+                val y = (j * stepY).coerceAtMost(bitmap.height - 1)
+                val pixel = bitmap.getPixel(x, y)
                 val r = (pixel shr 16) and 0xff
                 val g = (pixel shr 8) and 0xff
                 val b = pixel and 0xff
-                if (r < 10 && g < 10 && b < 10) {
-                    darkPixelCount++
-                }
+                val brightness = 0.299 * r + 0.587 * g + 0.114 * b
+                sum += brightness
+                sumSq += brightness * brightness
+                n++
+                if (brightness > 25) litPixels++
             }
         }
 
-        val totalSamples = samplePoints * samplePoints
-        return darkPixelCount >= (totalSamples * 0.98)
+        val mean = sum / n
+        val variance = (sumSq / n) - mean * mean
+        val stdDev = sqrt(maxOf(0.0, variance))
+
+        // Blank/locked screen: almost nothing lit AND nearly uniform darkness.
+        // A real dark-theme chart always has lit pixels (candles/text) or variance.
+        return litPixels < n * 0.02 && stdDev < 6.0
     }
 
     companion object {

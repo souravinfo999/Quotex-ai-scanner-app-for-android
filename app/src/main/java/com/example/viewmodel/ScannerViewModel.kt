@@ -9,12 +9,15 @@ import com.example.data.model.ScanSettings
 import com.example.data.repository.ScannerRepository
 import com.example.service.OverlayService
 import com.example.utils.PreferenceManager
+import com.example.utils.TelegramNotifier
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed class TestConnectionState {
     object Idle : TestConnectionState()
@@ -47,6 +50,9 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
     private val _testConnectionState = MutableStateFlow<TestConnectionState>(TestConnectionState.Idle)
     val testConnectionState: StateFlow<TestConnectionState> = _testConnectionState.asStateFlow()
 
+    private val _telegramTestState = MutableStateFlow<TestConnectionState>(TestConnectionState.Idle)
+    val telegramTestState: StateFlow<TestConnectionState> = _telegramTestState.asStateFlow()
+
     private val _analysisState = MutableStateFlow<AnalysisUiState>(AnalysisUiState.Idle)
     val analysisState: StateFlow<AnalysisUiState> = _analysisState.asStateFlow()
 
@@ -59,9 +65,15 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
         confidenceThreshold: Int,
         scanDelayMs: Long,
         analysisMode: String,
-        preferredModel: String
+        preferredModel: String,
+        telegramBotToken: String,
+        telegramChatId: String,
+        telegramEnabled: Boolean
     ) {
-        repository.saveSettings(apiKey, confidenceThreshold, scanDelayMs, analysisMode, preferredModel)
+        repository.saveSettings(
+            apiKey, confidenceThreshold, scanDelayMs, analysisMode, preferredModel,
+            telegramBotToken, telegramChatId, telegramEnabled
+        )
     }
 
     fun testConnection(apiKey: String) {
@@ -80,6 +92,26 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
     fun resetTestState() {
         _testConnectionState.value = TestConnectionState.Idle
+    }
+
+    fun testTelegram(botToken: String, chatId: String) {
+        viewModelScope.launch {
+            _telegramTestState.value = TestConnectionState.Loading
+            val result = withContext(Dispatchers.IO) {
+                TelegramNotifier.testConnection(botToken, chatId)
+            }
+            _telegramTestState.value = if (result.isSuccess) {
+                TestConnectionState.Success(result.getOrThrow())
+            } else {
+                TestConnectionState.Error(
+                    result.exceptionOrNull()?.message ?: "Telegram test failed"
+                )
+            }
+        }
+    }
+
+    fun resetTelegramTestState() {
+        _telegramTestState.value = TestConnectionState.Idle
     }
 
     fun analyzeBitmap(bitmap: Bitmap) {
