@@ -235,7 +235,11 @@ class MainActivity : ComponentActivity() {
                                             updatedSettings.preferredModel,
                                             updatedSettings.telegramBotToken,
                                             updatedSettings.telegramChatId,
-                                            updatedSettings.telegramEnabled
+                                            updatedSettings.telegramEnabled,
+                                            updatedSettings.cropTopPct,
+                                            updatedSettings.cropBottomPct,
+                                            updatedSettings.cropLeftPct,
+                                            updatedSettings.cropRightPct
                                         )
                                         Toast.makeText(this@MainActivity, "Settings Saved!", Toast.LENGTH_SHORT).show()
                                         startFloatingScanner()

@@ -68,11 +68,16 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
         preferredModel: String,
         telegramBotToken: String,
         telegramChatId: String,
-        telegramEnabled: Boolean
+        telegramEnabled: Boolean,
+        cropTopPct: Int,
+        cropBottomPct: Int,
+        cropLeftPct: Int,
+        cropRightPct: Int
     ) {
         repository.saveSettings(
             apiKey, confidenceThreshold, scanDelayMs, analysisMode, preferredModel,
-            telegramBotToken, telegramChatId, telegramEnabled
+            telegramBotToken, telegramChatId, telegramEnabled,
+            cropTopPct, cropBottomPct, cropLeftPct, cropRightPct
         )
     }
 

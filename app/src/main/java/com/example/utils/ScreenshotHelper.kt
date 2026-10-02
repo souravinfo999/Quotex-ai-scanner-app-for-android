@@ -227,6 +227,40 @@ object ScreenshotHelper {
         }
     }
 
+    /**
+     * Crops the screenshot down to the chart area before analysis.
+     * Removes broker UI chrome (top pair/timeframe bar, bottom Up/Down buttons,
+     * side panels) so the vision model only sees candlesticks — this reduces
+     * misreads and makes every scan focus on the actual price action.
+     * Percentages are configurable in Settings; 0/0/0/0 = no crop.
+     */
+    fun cropChartArea(
+        bitmap: Bitmap,
+        topPct: Int,
+        bottomPct: Int,
+        leftPct: Int,
+        rightPct: Int
+    ): Bitmap {
+        return try {
+            val t = topPct.coerceIn(0, 40)
+            val b = bottomPct.coerceIn(0, 40)
+            val l = leftPct.coerceIn(0, 40)
+            val r = rightPct.coerceIn(0, 40)
+            if (t == 0 && b == 0 && l == 0 && r == 0) return bitmap
+
+            val x = (bitmap.width * l / 100f).toInt().coerceIn(0, bitmap.width - 1)
+            val y = (bitmap.height * t / 100f).toInt().coerceIn(0, bitmap.height - 1)
+            val w = (bitmap.width * (100 - l - r) / 100f).toInt().coerceIn(1, bitmap.width - x)
+            val h = (bitmap.height * (100 - t - b) / 100f).toInt().coerceIn(1, bitmap.height - y)
+            if (w <= 10 || h <= 10) return bitmap
+
+            Bitmap.createBitmap(bitmap, x, y, w, h)
+        } catch (e: Exception) {
+            Log.w(TAG, "Chart crop failed, using full screenshot: ${e.message}")
+            bitmap
+        }
+    }
+
     private fun saveTempScreenshot(context: Context, bitmap: Bitmap): File? {
         return try {
             val file = File(context.cacheDir, "temp_chart_scan_${System.currentTimeMillis()}.png")

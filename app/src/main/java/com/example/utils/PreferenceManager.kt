@@ -23,7 +23,11 @@ class PreferenceManager(context: Context) {
             preferredModel = prefs.getString(KEY_MODEL, "pixtral-12b-2409") ?: "pixtral-12b-2409",
             telegramBotToken = prefs.getString(KEY_TELEGRAM_BOT_TOKEN, "") ?: "",
             telegramChatId = prefs.getString(KEY_TELEGRAM_CHAT_ID, "") ?: "",
-            telegramEnabled = prefs.getBoolean(KEY_TELEGRAM_ENABLED, false)
+            telegramEnabled = prefs.getBoolean(KEY_TELEGRAM_ENABLED, false),
+            cropTopPct = prefs.getInt(KEY_CROP_TOP, 12),
+            cropBottomPct = prefs.getInt(KEY_CROP_BOTTOM, 22),
+            cropLeftPct = prefs.getInt(KEY_CROP_LEFT, 3),
+            cropRightPct = prefs.getInt(KEY_CROP_RIGHT, 3)
         )
     }
 
@@ -35,7 +39,11 @@ class PreferenceManager(context: Context) {
         preferredModel: String,
         telegramBotToken: String,
         telegramChatId: String,
-        telegramEnabled: Boolean
+        telegramEnabled: Boolean,
+        cropTopPct: Int,
+        cropBottomPct: Int,
+        cropLeftPct: Int,
+        cropRightPct: Int
     ) {
         prefs.edit()
             .putString(KEY_API_KEY, apiKey)
@@ -46,6 +54,10 @@ class PreferenceManager(context: Context) {
             .putString(KEY_TELEGRAM_BOT_TOKEN, telegramBotToken.trim())
             .putString(KEY_TELEGRAM_CHAT_ID, telegramChatId.trim())
             .putBoolean(KEY_TELEGRAM_ENABLED, telegramEnabled)
+            .putInt(KEY_CROP_TOP, cropTopPct.coerceIn(0, 40))
+            .putInt(KEY_CROP_BOTTOM, cropBottomPct.coerceIn(0, 40))
+            .putInt(KEY_CROP_LEFT, cropLeftPct.coerceIn(0, 40))
+            .putInt(KEY_CROP_RIGHT, cropRightPct.coerceIn(0, 40))
             .apply()
 
         _settingsFlow.value = getSettings()
@@ -88,6 +100,10 @@ class PreferenceManager(context: Context) {
         private const val KEY_TELEGRAM_BOT_TOKEN = "key_telegram_bot_token"
         private const val KEY_TELEGRAM_CHAT_ID = "key_telegram_chat_id"
         private const val KEY_TELEGRAM_ENABLED = "key_telegram_enabled"
+        private const val KEY_CROP_TOP = "key_crop_top"
+        private const val KEY_CROP_BOTTOM = "key_crop_bottom"
+        private const val KEY_CROP_LEFT = "key_crop_left"
+        private const val KEY_CROP_RIGHT = "key_crop_right"
         private const val KEY_LAST_SCAN_DIR = "key_last_scan_dir"
         private const val KEY_LAST_SCAN_STRUCT = "key_last_scan_struct"
         private const val KEY_LAST_SCAN_TS = "key_last_scan_ts"

@@ -49,5 +49,9 @@ data class ScanSettings(
     val preferredModel: String = "pixtral-12b-2409",
     val telegramBotToken: String = "",
     val telegramChatId: String = "",
-    val telegramEnabled: Boolean = false
+    val telegramEnabled: Boolean = false,
+    val cropTopPct: Int = 12,    // % to cut from top (broker header bar)
+    val cropBottomPct: Int = 22, // % to cut from bottom (Up/Down buttons)
+    val cropLeftPct: Int = 3,
+    val cropRightPct: Int = 3
 )
