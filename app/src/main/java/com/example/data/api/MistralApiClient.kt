@@ -90,7 +90,15 @@ class MistralApiClient {
                 // Text prompt
                 put(JSONObject().apply {
                     put("type", "text")
-                    put("text", SYSTEM_PROMPT)
+                    // Unique scan ID defeats any caching and forces the model to
+                    // treat every scan as an independent, situation-based analysis.
+                    val scanId = System.currentTimeMillis()
+                    put("text", SYSTEM_PROMPT + "\n\nINDEPENDENT SCAN NOTICE (scan_id: $scanId): " +
+                            "This is a brand-new, independent scan. Analyze ONLY the candlesticks " +
+                            "visible in THIS screenshot right now — the current live situation. " +
+                            "Never assume continuity with any previous scan or repeat a previous " +
+                            "prediction from memory. If the visible situation is ambiguous, " +
+                            "return UNCERTAIN.")
                 })
                 // Image part
                 put(JSONObject().apply {

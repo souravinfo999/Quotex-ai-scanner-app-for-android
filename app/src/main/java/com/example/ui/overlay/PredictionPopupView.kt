@@ -347,6 +347,26 @@ class PredictionPopupView(
         }
         containerLayout.addView(actionButton)
 
+        // Fresh-scan proof: exact scan time, so the user can SEE this is a
+        // brand-new analysis of the current screenshot — never a repeat.
+        if (!result.isNoChart) {
+            addSpace(8)
+            val freshScanTv = TextView(context).apply {
+                val fmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+                text = "🔄 Fresh analysis • ${fmt.format(java.util.Date(result.timestamp))}"
+                textSize = 10f
+                typeface = Typeface.MONOSPACE
+                setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+                setTextColor(Color.parseColor("#AA000000"))
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+            containerLayout.addView(freshScanTv)
+        }
+
         // 6. Next 1M candle countdown — 1-minute binary options are most accurate
         // when the scan happens right at the candle open.
         if (!result.isNoChart) {

@@ -12,6 +12,7 @@ import com.example.data.model.PredictionResult
 import com.example.data.model.ScanSettings
 import com.example.service.OutcomeReminderReceiver
 import com.example.utils.PreferenceManager
+import com.example.utils.ScreenshotHelper
 import com.example.utils.TelegramNotifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -87,13 +88,24 @@ class ScannerRepository(context: Context) {
     }
 
     suspend fun analyzeBitmap(bitmap: Bitmap): Result<PredictionResult> = withContext(Dispatchers.Default) {
+        val settings = getSettings()
+
+        // Crop to the chart area first: the vision model should only see
+        // candlesticks, not broker UI chrome (header, Up/Down buttons).
+        val chartBitmap = ScreenshotHelper.cropChartArea(
+            bitmap,
+            settings.cropTopPct,
+            settings.cropBottomPct,
+            settings.cropLeftPct,
+            settings.cropRightPct
+        )
+
         // Validate if blank or completely black
-        if (isBitmapBlankOrBlack(bitmap)) {
+        if (isBitmapBlankOrBlack(chartBitmap)) {
             return@withContext Result.failure(Exception("🖤 Invalid screenshot. Chart not visible or screen locked."))
         }
 
-        val base64 = encodeBitmapToBase64(bitmap)
-        val settings = getSettings()
+        val base64 = encodeBitmapToBase64(chartBitmap)
 
         val apiResult = apiClient.analyzeChart(base64, settings)
         if (apiResult.isSuccess) {
@@ -101,6 +113,9 @@ class ScannerRepository(context: Context) {
 
             // Duplicate filter check (User requirement 17). Falls back to the
             // persisted fingerprint so it survives app process restarts.
+            // CANDLE-AWARE: a new 1-minute candle is a new market situation —
+            // never suppress the signal when the candle has rolled over since
+            // the last scan. Same-candle re-scans still dedupe to avoid spam.
             val effectiveLastScan = lastProcessedScan ?: prefs.getLastScanFingerprint()?.let { (dir, struct, ts) ->
                 PredictionResult(
                     id = -1L,
@@ -111,17 +126,21 @@ class ScannerRepository(context: Context) {
                     timestamp = ts
                 )
             }
-            if (!result.isNoChart && QuantSignalEngine.isDuplicateSignal(
+            val lastTs = effectiveLastScan?.timestamp ?: 0L
+            val sameCandle = lastTs > 0L && (result.timestamp / 60_000L) == (lastTs / 60_000L)
+            if (!result.isNoChart && sameCandle && QuantSignalEngine.isDuplicateSignal(
                     lastScan = effectiveLastScan,
                     direction = result.prediction,
                     structure = result.marketStructure,
                     timestamp = result.timestamp
                 )
             ) {
-                // Return current active setup without spamming duplicate database records
+                // Same-candle re-scan with an unchanged setup: the analysis above
+                // is still a FRESH evaluation of the current screenshot — we only
+                // skip writing another duplicate row to the database.
                 return@withContext Result.success(
                     result.copy(
-                        advice = "SETUP ACTIVE: ${result.advice} (Waiting for next 1M candle open)"
+                        advice = "SETUP STILL ACTIVE (fresh re-scan just now) — waiting for next 1M candle"
                     )
                 )
             }

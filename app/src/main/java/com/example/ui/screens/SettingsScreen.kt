@@ -111,6 +111,18 @@ fun SettingsScreen(
         mutableStateOf(currentSettings.telegramEnabled)
     }
     var telegramTokenVisible by remember { mutableStateOf(false) }
+    var cropTopPct by remember(currentSettings.cropTopPct) {
+        mutableFloatStateOf(currentSettings.cropTopPct.toFloat())
+    }
+    var cropBottomPct by remember(currentSettings.cropBottomPct) {
+        mutableFloatStateOf(currentSettings.cropBottomPct.toFloat())
+    }
+    var cropLeftPct by remember(currentSettings.cropLeftPct) {
+        mutableFloatStateOf(currentSettings.cropLeftPct.toFloat())
+    }
+    var cropRightPct by remember(currentSettings.cropRightPct) {
+        mutableFloatStateOf(currentSettings.cropRightPct.toFloat())
+    }
 
     val scrollState = rememberScrollState()
 
@@ -573,9 +585,79 @@ fun SettingsScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 5. Chart Crop Card — cut broker UI chrome so the AI only sees candles
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .border(1.dp, SurfaceBorder, RoundedCornerShape(18.dp)),
+            colors = CardDefaults.cardColors(containerColor = SurfaceCard)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "CHART-AREA CROP",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextSecondary,
+                    letterSpacing = 1.sp
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Cuts broker UI (header bar, Up/Down buttons, side panels) from the screenshot before analysis, so every signal comes from pure price action.",
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+
+                @Composable
+                fun CropSlider(label: String, value: Float, onChange: (Float) -> Unit) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(label, fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                        Text(
+                            "${value.toInt()}%",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PrimaryTeal
+                        )
+                    }
+                    Slider(
+                        value = value,
+                        onValueChange = onChange,
+                        valueRange = 0f..40f,
+                        steps = 7,
+                        colors = SliderDefaults.colors(
+                            thumbColor = PrimaryTeal,
+                            activeTrackColor = PrimaryTeal,
+                            inactiveTrackColor = SurfaceBorder
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                CropSlider("Top (header bar)", cropTopPct) { cropTopPct = it }
+                CropSlider("Bottom (Up/Down buttons)", cropBottomPct) { cropBottomPct = it }
+                CropSlider("Left", cropLeftPct) { cropLeftPct = it }
+                CropSlider("Right (price axis)", cropRightPct) { cropRightPct = it }
+
+                Text(
+                    text = "Tip: keep the right-side price axis visible — the AI uses it for S/R levels. Defaults fit Quotex mobile layout.",
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 5. Save & Launch Button
+        // 6. Save & Launch Button
         Button(
             onClick = {
                 val updated = ScanSettings(
@@ -586,7 +668,11 @@ fun SettingsScreen(
                     preferredModel = "pixtral-12b-2409",
                     telegramBotToken = telegramBotToken,
                     telegramChatId = telegramChatId,
-                    telegramEnabled = telegramEnabled
+                    telegramEnabled = telegramEnabled,
+                    cropTopPct = cropTopPct.toInt(),
+                    cropBottomPct = cropBottomPct.toInt(),
+                    cropLeftPct = cropLeftPct.toInt(),
+                    cropRightPct = cropRightPct.toInt()
                 )
                 onSaveAndStart(updated)
             },
